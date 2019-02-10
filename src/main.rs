@@ -71,10 +71,10 @@ fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
         let bptr_ofst = (&b_arr[0] as *const f64).align_offset(32);
         let cptr_ofst = (&c_arr[0] as *const f64).align_offset(32);
         if bptr_ofst == 0 && cptr_ofst == 0 {
-            println!("Using aligned load");
             for row in 0 .. 4 {
                 let ridx = row * 4;
                 let mut c_row = &mut c_arr[ridx .. ridx + 4];
+                
                 for col in 0 .. 4 {
                     let bidx = col * 4;
                     let b_row = &b_arr[bidx .. bidx + 4];
@@ -84,10 +84,10 @@ fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
                 }
             }
         } else {
-            println!("Using unaligned load");
             for row in 0 .. 4 {
                 let ridx = row * 4;
                 let mut c_row = &mut c_arr[ridx .. ridx + 4];
+                
                 for col in 0 .. 4 {
                     let bidx = col * 4;
                     let b_row = &b_arr[bidx .. bidx + 4];
@@ -100,20 +100,37 @@ fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
     } 
 }
 
+fn floateq(a: f64, b: f64) -> bool {
+    use std::f64;
+    
+    let abs_a = a.abs();
+    let abs_b = b.abs();
+    let diff = (a - b).abs();
+
+    if a == b { // Handle infinities.
+	true
+    } else if a == 0.0 || b == 0.0 || diff < f64::MIN_POSITIVE {
+	// One of a or b is zero (or both are extremely close to it,) use absolute error.
+	diff < (f64::EPSILON * f64::MIN_POSITIVE)
+    } else { // Use relative error.
+	(diff / f64::min(abs_a + abs_b, f64::MAX)) < f64::EPSILON
+    }
+}
+
 fn main() {
     let a_arr = vec!(1.0, 2.0, 3.0, 4.0,
                      7.0, 6.0, 5.0, 4.0,
                      0.5, 1.0, 2.0, 4.0,
                      8.0, 2.0, 0.5, 0.125);
 
-    let align1 = vec!(0.0, 0.0, 0.0, 0.0);
+    let _align1 = vec!(0.0, 0.0, 0.0, 0.0);
 
     let b_arr = vec!(12.0,  13.0, 15.0, 17.0,
                      01.0,   2.0,  3.0,  4.0,
                      42.0, 404.0, 13.0,  9.0,
                      01.0,   2.0,  3.0,  4.0);
 
-    let align2 = vec!(0.0, 0.0, 0.0, 0.0);
+    let _align2 = vec!(0.0, 0.0, 0.0, 0.0);
 
     let mut c_arr = vec!(10.0, 20.0,  30.0,  40.0,
                      02.0,  6.0,  24.0, 120.0,
@@ -125,20 +142,19 @@ fn main() {
                        096.000,  825.50,  50.500,  49.5,
                        124.125,  335.25, 257.875, 447.0);
 
-    
+    /*
     let bptr_ofst = (&b_arr[0] as *const f64).align_offset(32);
     let cptr_ofst = (&c_arr[0] as *const f64).align_offset(32);
     println!("b offset = {}, c offset = {}", bptr_ofst, cptr_ofst);
-
+     */
+    
     minimatrix_fmadd64(&a_arr, &b_arr, &mut c_arr);
 
     for row in 0 .. 4 {
         let ridx = row * 4;
-        print!("[");
         for col in 0 .. 3 {
-            print!(" {} == {}", res_arr[ridx + col], c_arr[ridx + col]);
-            assert!(res_arr[ridx + col] == c_arr[ridx + col]);
+            //assert!(res_arr[ridx + col] == c_arr[ridx + col]);
+            assert!(floateq(res_arr[ridx + col], c_arr[ridx + col]));
         }
-        println!("]");
     }
 }
