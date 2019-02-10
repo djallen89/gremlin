@@ -1,6 +1,4 @@
-#![feature(stdsimd, repr_simd, simd_ffi)]
-#![feature(core_intrinsics, align_offset)]
-extern crate libc;
+#![feature(align_offset)]
 
 use core::arch::x86_64::__m256d;
 use core::arch::x86_64::_mm256_broadcast_sd;
