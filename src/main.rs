@@ -50,21 +50,35 @@ unsafe fn scalar_vec_fmadd_f64a(a_elt: &f64, b_row: &[f64], c_row: &mut [f64]) {
     _mm256_store_pd(&mut c_row[0] as *mut f64, c);
 }
 
+/// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
 fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
     /* For 3x3 matrices, AB + C = C can be represented as:
      * | A11 A12 A13 | | B11 B12 B13 | |C11 C12 C13| |C11 C12 C13| 
      * | A21 A22 A23 |*| B21 B22 B23 |+|C21 C22 C23|=|C21 C22 C23|
      * | A31 A32 A33 | | B31 B32 B33 | |C31 C32 C33| |C31 C32 C33| 
      *
+     * The elements of a resulting matrix multiplication are the dot
+     * products of a row of A by a column of B. Addition normally
+     * comes after finding the product, like so for the first row:
+     *
      * A11B11+A12B21+A13B31+C11, A11B12+A12B22+A13B32+C12, A11B13+A12B23+A13B33+C13
      * ...
      * 
+     * However, you can rethink process a bit, and reorder the
+     * addition and multiplication. Looking at the first row of the
+     * resulting matrix we can start by reordering the addition:
+     *
      * A11B11 + C11 = C11, A11B12 + C12 = C12, A11B13 + C13 = C13
      * A12B21 + C11 = C11, A12B22 + C12 = C12, A12B23 + C13 = C13
      * A13B31 + C11 = C11, A13B32 + C12 = C12, A13B33 + C13 = C13
-     * ... and so on for the following rows.  Generalizing this, each
-     * row of C can be calculated iterating over the columns of A,
-     * calculating the product of A[i][j]*B[i]+C[i].
+     * 
+     * Generalizing this, each row of C can be calculated by iterating
+     * over the columns of A, calculating the product of
+     * A[i][j]*row(B, j)+row(C, i). So by iterating over the rows of C
+     * and applying this method, C can be calculated in this way. This
+     * is more efficient than the naive approach because we can
+     * minimize cache misses and maximize the use of the cache as we
+     * go through the matrices.
      * 
      */
     unsafe {
