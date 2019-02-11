@@ -1,9 +1,12 @@
 #![feature(align_offset)]
 
 pub mod lib;
-use lib::{minimatrix_fmadd64, floateq};
+
+#[cfg(test)]
+mod test;
 
 fn main() {
+    /*
     let a_arr = vec!(1.0, 2.0, 3.0, 4.0,
                      7.0, 6.0, 5.0, 4.0,
                      0.5, 1.0, 2.0, 4.0,
@@ -28,19 +31,20 @@ fn main() {
                        096.000,  825.50,  50.500,  49.5,
                        124.125,  335.25, 257.875, 447.0);
 
-    /*
-    let bptr_ofst = (&b_arr[0] as *const f64).align_offset(32);
-    let cptr_ofst = (&c_arr[0] as *const f64).align_offset(32);
-    println!("b offset = {}, c offset = {}", bptr_ofst, cptr_ofst);
-     */
-    
-    minimatrix_fmadd64(&a_arr, &b_arr, &mut c_arr);
-
     for row in 0 .. 4 {
         let ridx = row * 4;
-        for col in 0 .. 3 {
+        for col in 0 .. 4 {
+            println!("{} = {}", res_arr[ridx + col], c_arr[ridx + col]);
             //assert!(res_arr[ridx + col] == c_arr[ridx + col]);
-            assert!(floateq(res_arr[ridx + col], c_arr[ridx + col]));
+            //assert!(floateq(res_arr[ridx + col], c_arr[ridx + col]));
         }
     }
+
+        let res_arr = vec!(154.000, 1257.00, 102.000, 108.0,
+                       306.000, 2137.00, 224.000, 324.0,
+                       096.000,  825.50,  50.500,  49.5,
+                       124.125,  335.25, 257.875, 447.0);
+
+    minimatrix_fmadd64(4, &a_arr, &b_arr, &mut c_arr);
+     */
 }

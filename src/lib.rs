@@ -1,6 +1,7 @@
 #![feature(align_offset)]
 
 extern crate rand;
+extern crate ndarray;
 
 use rand::prelude::*;
 use core::arch::x86_64::__m256d;
@@ -50,16 +51,8 @@ unsafe fn scalar_vec_fmadd_f64a(a_elt: &f64, b_row: &[f64], c_row: &mut [f64]) {
 }
 
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
-pub fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
+pub fn minimatrix_fmadd64(cols: usize, a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
     /* For 3x3 matrices, AB + C = C can be represented as:
-     * | A11 A12 A13 | | B11 B12 B13 | |C11 C12 C13| |C11 C12 C13| 
-     * | A21 A22 A23 |*| B21 B22 B23 |+|C21 C22 C23|=|C21 C22 C23|
-     * | A31 A32 A33 | | B31 B32 B33 | |C31 C32 C33| |C31 C32 C33| 
-     *
-     * The elements of a resulting matrix multiplication are the dot
-     * products of a row of A by a column of B. Addition normally
-     * comes after finding the product, like so for the first row:
-     *
      * A11B11+A12B21+A13B31+C11, A11B12+A12B22+A13B32+C12, A11B13+A12B23+A13B33+C13
      * ...
      * 
@@ -77,15 +70,14 @@ pub fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
      * and applying this method, C can be calculated in this way. This
      * is more efficient than the naive approach because we can
      * minimize cache misses and maximize the use of the cache as we
-     * go through the matrices.
-     * 
-     */
+     * go through the matrices. */
+
     unsafe {
         let bptr_ofst = (&b_arr[0] as *const f64).align_offset(32);
         let cptr_ofst = (&c_arr[0] as *const f64).align_offset(32);
         if bptr_ofst == 0 && cptr_ofst == 0 {
             for row in 0 .. 4 {
-                let ridx = row * 4;
+                let ridx = row * cols;
                 let mut c_row = &mut c_arr[ridx .. ridx + 4];
                 
                 for col in 0 .. 4 {
@@ -98,7 +90,7 @@ pub fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
             }
         } else {
             for row in 0 .. 4 {
-                let ridx = row * 4;
+                let ridx = row * cols;
                 let mut c_row = &mut c_arr[ridx .. ridx + 4];
                 
                 for col in 0 .. 4 {
@@ -113,6 +105,29 @@ pub fn minimatrix_fmadd64(a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
     } 
 }
 
+pub fn matrix_madd(n_cols: usize, m_rows: usize, a: &[f64], b: &[f64], c: &mut [f64]) {
+    /* 4col x 4row block of C += (n_cols x 4row of A)(4col * m_rows of B) */
+    let row_blocks = m_rows - m_rows % 4;
+    let col_blocks = n_cols - n_cols % 4;
+
+    /* Zig zag in 4 column chunks of B through 4 row stripes of A */
+    for b_col_group in 0 .. col_blocks / 4 {
+        println!("iter{}", b_col_group);
+        //let bidx = col_blocks * 4;
+        let bidx = b_col_group * 4;
+        println!("bidx = {}, end = {}", bidx, bidx + 4 * n_cols);
+        let b_block = &b[bidx .. bidx + 4 * n_cols];
+
+        for a_row_group in 0 .. row_blocks / 4 {
+            let idx0 = a_row_group * 4 * n_cols + b_col_group * 4;
+            let idxf = idx0 + 4 * n_cols;
+            let a_block = &a[idx0 .. idxf];
+            let c_block = &mut c[idx0 .. idxf];
+            minimatrix_fmadd64(n_cols, a_block, b_block, c_block);
+        }
+    }
+}
+
 pub fn floateq(a: f64, b: f64) -> bool {
     use std::f64;
     
@@ -120,12 +135,11 @@ pub fn floateq(a: f64, b: f64) -> bool {
     let abs_b = b.abs();
     let diff = (a - b).abs();
 
-    if a == b { // Handle infinities.
+    if a == b {
 	true
     } else if a == 0.0 || b == 0.0 || diff < f64::MIN_POSITIVE {
-	// One of a or b is zero (or both are extremely close to it,) use absolute error.
 	diff < (f64::EPSILON * f64::MIN_POSITIVE)
-    } else { // Use relative error.
+    } else { 
 	(diff / f64::min(abs_a + abs_b, f64::MAX)) < f64::EPSILON
     }
 }
@@ -142,8 +156,8 @@ pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
     let mut rng = rand::thread_rng();
     let mut arr = Vec::with_capacity(rows * cols);
     
-    for i in 0 .. rows * cols {
-        arr[i] = interval.sample(&mut rng);
+    for _ in 0 .. rows * cols {
+        arr.push(interval.sample(&mut rng))
     }
 
     return arr;
