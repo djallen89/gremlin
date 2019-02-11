@@ -6,3 +6,5 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2.48"
+criterion = "0.2.10"
+rand = "0.6"
