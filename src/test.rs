@@ -81,7 +81,9 @@ fn matrix_madd_4x4() {
 
 #[test]
 fn matrix_madd_test() {
-    matrix_madd_nxm(8, 8);
+    for n in 1 .. 64 {
+        matrix_madd_nxm(n * 4, n * 4);
+    }
 }
 
 fn matrix_madd_nxm(n: usize, m: usize) {

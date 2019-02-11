@@ -119,7 +119,8 @@ pub fn matrix_madd(n_cols: usize, m_rows: usize, a: &[f64], b: &[f64], c: &mut [
         let b_block = &b[bidx .. bidx + 4 * n_cols];
 
         for a_row_group in 0 .. row_blocks / 4 {
-            let idx0 = a_row_group * 4 * n_cols + b_col_group * 4;
+            println!("a_row_group = {}", a_row_group);
+            let idx0 = a_row_group * n_cols + b_col_group * 4;
             let idxf = idx0 + 4 * n_cols;
             let a_block = &a[idx0 .. idxf];
             let c_block = &mut c[idx0 .. idxf];
