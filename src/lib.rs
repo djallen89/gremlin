@@ -2,6 +2,7 @@
 
 extern crate rand;
 extern crate ndarray;
+extern crate matrixmultiply;
 
 use rand::prelude::*;
 use core::arch::x86_64::__m256d;
@@ -51,7 +52,7 @@ unsafe fn scalar_vec_fmadd_f64a(a_elt: &f64, b_row: &[f64], c_row: &mut [f64]) {
 }
 
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
-pub fn minimatrix_fmadd64(cols: usize, a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
+pub fn minimatrix_fmadd64(cols: usize, nrows: usize, a_arr: &[f64], b_arr: &[f64], c_arr: &mut [f64]) {
     /* For 3x3 matrices, AB + C = C can be represented as:
      * A11B11+A12B21+A13B31+C11, A11B12+A12B22+A13B32+C12, A11B13+A12B23+A13B33+C13
      * ...
@@ -71,61 +72,75 @@ pub fn minimatrix_fmadd64(cols: usize, a_arr: &[f64], b_arr: &[f64], c_arr: &mut
      * is more efficient than the naive approach because we can
      * minimize cache misses and maximize the use of the cache as we
      * go through the matrices. */
-
-    unsafe {
-        let bptr_ofst = (&b_arr[0] as *const f64).align_offset(32);
-        let cptr_ofst = (&c_arr[0] as *const f64).align_offset(32);
-        if bptr_ofst == 0 && cptr_ofst == 0 {
-            for row in 0 .. 4 {
-                let ridx = row * cols;
-                let mut c_row = &mut c_arr[ridx .. ridx + 4];
-                
-                for col in 0 .. 4 {
-                    let bidx = col * 4;
-                    let b_row = &b_arr[bidx .. bidx + 4];
-
-                    let a_elt = &a_arr[ridx + col];
-                    scalar_vec_fmadd_f64a(a_elt, b_row, &mut c_row);
-                }
-            }
-        } else {
-            for row in 0 .. 4 {
-                let ridx = row * cols;
-                let mut c_row = &mut c_arr[ridx .. ridx + 4];
-                
-                for col in 0 .. 4 {
-                    let bidx = col * 4;
-                    let b_row = &b_arr[bidx .. bidx + 4];
-
-                    let a_elt = &a_arr[ridx + col];
-                    scalar_vec_fmadd_f64u(a_elt, b_row, &mut c_row);
-                }
+    for row in 0 .. 4 {
+        let ridx = row * 4;
+        let mut c_row = &mut c_arr[ridx .. ridx + 4];
+        
+        for col in 0 .. 4 {
+            let bidx = col * 4;
+            let b_row = &b_arr[bidx .. bidx + 4];
+            let a_elt = &a_arr[ridx + col];
+            unsafe { 
+                scalar_vec_fmadd_f64u(a_elt, b_row, &mut c_row);
             }
         }
-    } 
+    }
 }
 
 pub fn matrix_madd(n_cols: usize, m_rows: usize, a: &[f64], b: &[f64], c: &mut [f64]) {
+    if n_cols == 1 && m_rows == 1 {
+        c[0] = a[0]*b[0] + c[0];
+    }
     /* 4col x 4row block of C += (n_cols x 4row of A)(4col * m_rows of B) */
-    let row_blocks = m_rows - m_rows % 4;
-    let col_blocks = n_cols - n_cols % 4;
+    let row_blocks = (m_rows - m_rows % 4) / 4;
+    let col_blocks = (n_cols - n_cols % 4) / 4;
 
     /* Zig zag in 4 column chunks of B through 4 row stripes of A */
-    for b_col_group in 0 .. col_blocks / 4 {
-        //println!("iter{}", b_col_group);
+    for b_col_group in 0 .. col_blocks {
         let bidx = b_col_group * 4;
-        //println!("bidx = {}, end = {}", bidx, bidx + 4 * n_cols);
         let b_block = &b[bidx .. bidx + 4 * n_cols];
 
-        for a_row_group in 0 .. row_blocks / 4 {
-            //println!("a_row_group = {}", a_row_group);
+        /* Dispatch the chunks of A and C in 4x4 blocks*/
+        for a_row_group in 0 .. row_blocks {
             let idx0 = a_row_group * n_cols + b_col_group * 4;
             let idxf = idx0 + 4 * n_cols;
             let a_block = &a[idx0 .. idxf];
             let c_block = &mut c[idx0 .. idxf];
-            minimatrix_fmadd64(n_cols, a_block, b_block, c_block);
+            minimatrix_fmadd64(n_cols, 4, a_block, b_block, c_block);
+        }
+/*
+        if row_blocks * 4 < m_rows {
+            let rem_rows = m_rows - 4 * row_blocks;
+            let idx0 = row_blocks * n_cols + b_col_group * 4;
+            let a_block = &a[idx0 .. ];
+            let c_block = &mut c[idx0 ..];
+            minimatrix_fmadd64(n_cols, rem_rows, a_block, b_block, c_block);
+        }
+*/
+    }
+/*
+    for b_col in col_blocks * 4 .. n_cols {
+        for a_row in 0 .. m_rows {
+            let mut sum = 0.0;
+            for k in 0 .. m_rows {
+                sum += a[a_row * n_cols + k]*b[k * n_cols + b_col];
+            }
+            c[a_row * n_cols + b_col] += sum;
         }
     }
+*/
+/*
+    for a_row_group in in 0 .. row_blocks * 4 {
+        let idx0 = a_row_group * n_cols
+        let idxf = 
+
+        for b_col_group in col_blocks .. n_cols {
+            
+        }
+
+        
+    }
+*/
 }
 
 pub fn floateq(a: f64, b: f64) -> bool {
@@ -142,6 +157,7 @@ pub fn floateq(a: f64, b: f64) -> bool {
     } else { 
 	(diff / f64::min(abs_a + abs_b, f64::MAX)) < f64::EPSILON
     }
+
 }
 
 pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>

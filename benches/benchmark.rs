@@ -1,9 +1,10 @@
 #[macro_use]
 extern crate criterion;
-use gremlin::{random_array, matrix_madd};
 
-use ndarray::Array;
-use ndarray::linalg::general_mat_mul;
+use gremlin::{random_array, matrix_madd};
+//use ndarray::Array;
+//use ndarray::linalg::general_mat_mul;
+use matrixmultiply::dgemm;
 
 use criterion::{Benchmark, Criterion};
 
@@ -16,19 +17,22 @@ fn benchdgemm(crit: &mut Criterion) {
     let b = random_array(n, m, -100.0, 100.0);
     let mut c = random_array(n, m, -100.0, 100.0);
 
-    let a_arr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
-    let b_arr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
-    let mut c_arr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
+    let adgm = a.clone();
+    let bdgm = b.clone();
+    let mut cdgm = c.clone();
 
     let bench_def = Benchmark::new(
         "my dgemm 1024sq",
         move |bch| bch.iter(|| {
             matrix_madd(n, m, &a, &b, &mut c)
         }))
-        .with_function("ndarray dgemm 1024sq", move |bch| bch.iter(|| {
-            general_mat_mul(1.0, &a_arr, &b_arr, 1.0, &mut c_arr)
+        .with_function("matrixmultiply dgemm 1024 sq", move |bch| bch.iter(|| unsafe {
+            dgemm(1024, 1024, 1024, 1.0,
+                  &adgm[0] as *const f64, 128, 32,
+                  &bdgm[0] as *const f64, 32, 128,
+                  1.0, &mut cdgm[0] as *mut f64, 32, 32)
         }))
-        .sample_size(50);
+        .sample_size(10);
     
     crit.bench("dgemm", bench_def);
 }
