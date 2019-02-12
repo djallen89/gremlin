@@ -81,16 +81,15 @@ fn matrix_madd_4x4() {
 
 #[test]
 fn matrix_madd_test() {
-    for n in 1 .. 64 {
+    for n in 1 .. 8 {
         matrix_madd_nxm(n * 4, n * 4);
     }
 }
 
-fn matrix_madd_nxm(n: usize, m: usize) {
+pub fn matrix_madd_nxm(n: usize, m: usize) {
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(n, m, -100.0, 100.0);
     let mut c = random_array(n, m, -100.0, 100.0);
-
 
     let a_arr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
     let b_arr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
