@@ -112,14 +112,13 @@ pub fn matrix_madd(n_cols: usize, m_rows: usize, a: &[f64], b: &[f64], c: &mut [
 
     /* Zig zag in 4 column chunks of B through 4 row stripes of A */
     for b_col_group in 0 .. col_blocks / 4 {
-        println!("iter{}", b_col_group);
-        //let bidx = col_blocks * 4;
+        //println!("iter{}", b_col_group);
         let bidx = b_col_group * 4;
-        println!("bidx = {}, end = {}", bidx, bidx + 4 * n_cols);
+        //println!("bidx = {}, end = {}", bidx, bidx + 4 * n_cols);
         let b_block = &b[bidx .. bidx + 4 * n_cols];
 
         for a_row_group in 0 .. row_blocks / 4 {
-            println!("a_row_group = {}", a_row_group);
+            //println!("a_row_group = {}", a_row_group);
             let idx0 = a_row_group * n_cols + b_col_group * 4;
             let idxf = idx0 + 4 * n_cols;
             let a_block = &a[idx0 .. idxf];

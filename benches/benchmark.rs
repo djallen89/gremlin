@@ -7,7 +7,7 @@ use ndarray::linalg::general_mat_mul;
 
 use criterion::{Benchmark, Criterion};
 
-#[bench]
+//#[bench]
 fn benchdgemm(crit: &mut Criterion) {
     let n = 32;
     let m = 32;
