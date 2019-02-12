@@ -55,7 +55,7 @@ fn test_minimatrix_unaligned() {
     let res_arr = vec!(154.000, 1257.00, 102.000, 108.0,
                        306.000, 2137.00, 224.000, 324.0,
                        096.000,  825.50,  50.500,  49.5,
-                       124.125,  335.25, 257.875, 447.0);
+                       124.125,  335.25, 257.875, 774.0);
 
     minimatrix_fmadd64(4, 4, &a_arr, &b_arr, &mut c_arr);
 
@@ -103,18 +103,8 @@ pub fn matrix_madd_nxm(n: usize, m: usize) {
 }
 
 fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
-    /*
     for i in 0 .. rows * cols {
-            assert!(floateq(c[i], correct[i]));
-    }
-     */
-
-    for row in 0 .. 4 {
-        let ridx = row * 4;
-        for col in 0 .. 4 {
-            //assert!(res_arr[ridx + col] == c_arr[ridx + col]);
-            assert!(floateq(c[ridx + col], correct [ridx + col]));
-        }
+        assert!(floateq(c[i], correct[i]));
     }
 }
     
