@@ -9,8 +9,8 @@ use criterion::{Benchmark, Criterion};
 
 //#[bench]
 fn benchdgemm(crit: &mut Criterion) {
-    let n = 32;
-    let m = 32;
+    let n = 1024;
+    let m = 1024;
     
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(n, m, -100.0, 100.0);
@@ -21,11 +21,11 @@ fn benchdgemm(crit: &mut Criterion) {
     let mut c_arr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
 
     let bench_def = Benchmark::new(
-        "my dgemm 32x32",
+        "my dgemm 1024sq",
         move |bch| bch.iter(|| {
             matrix_madd(n, m, &a, &b, &mut c)
         }))
-        .with_function("ndarray dgemm 32x32", move |bch| bch.iter(|| {
+        .with_function("ndarray dgemm 1024sq", move |bch| bch.iter(|| {
             general_mat_mul(1.0, &a_arr, &b_arr, 1.0, &mut c_arr)
         }))
         .sample_size(50);

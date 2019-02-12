@@ -86,6 +86,11 @@ fn matrix_madd_test() {
     }
 }
 
+#[test]
+fn matrix_1024_test() {
+    matrix_madd_nxm(1024, 1024);
+}
+
 pub fn matrix_madd_nxm(n: usize, m: usize) {
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(n, m, -100.0, 100.0);
