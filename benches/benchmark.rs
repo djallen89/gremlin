@@ -2,35 +2,33 @@
 extern crate criterion;
 
 use gremlin::{random_array, matrix_madd};
-//use ndarray::Array;
-//use ndarray::linalg::general_mat_mul;
-use matrixmultiply::dgemm;
+use ndarray::Array;
+use ndarray::linalg::general_mat_mul;
 
 use criterion::{Benchmark, Criterion};
 
 //#[bench]
 fn benchdgemm(crit: &mut Criterion) {
-    let n = 1024;
-    let m = 1024;
+    let n = 4*256;
+    let m = 4*256;
+
+    let my_name = format!("my dgemm {}sq", n);
+    let other_name = format!("ndarray {}sq", n);
     
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(n, m, -100.0, 100.0);
     let mut c = random_array(n, m, -100.0, 100.0);
 
-    let adgm = a.clone();
-    let bdgm = b.clone();
-    let mut cdgm = c.clone();
+    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((4, 4)).unwrap();
 
     let bench_def = Benchmark::new(
-        "my dgemm 1024sq",
-        move |bch| bch.iter(|| {
+        &my_name, move |bch| bch.iter(|| {
             matrix_madd(n, m, &a, &b, &mut c)
         }))
-        .with_function("matrixmultiply dgemm 1024 sq", move |bch| bch.iter(|| unsafe {
-            dgemm(1024, 1024, 1024, 1.0,
-                  &adgm[0] as *const f64, 128, 32,
-                  &bdgm[0] as *const f64, 32, 128,
-                  1.0, &mut cdgm[0] as *mut f64, 32, 32)
+        .with_function(&other_name, move |bch| bch.iter(|| unsafe {
+            general_mat_mull(1.0, &aarr, &barr, 1.0, &mut carr)
         }))
         .sample_size(10);
     

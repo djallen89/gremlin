@@ -3,7 +3,6 @@ use super::lib::{minimatrix_fmadd64};
 use super::lib::{matrix_madd, floateq};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
-use matrixmultiply::dgemm;
 
 #[test]
 fn test_minimatrix_aligned() {
@@ -29,9 +28,9 @@ fn test_minimatrix_aligned() {
     let res_arr = vec!(154.000, 1257.00, 102.000, 108.0,
                        306.000, 2137.00, 224.000, 324.0,
                        096.000,  825.50,  50.500,  49.5,
-                       124.125,  335.25, 257.875, 447.0);
+                       124.125,  335.25, 257.875, 774.0);
 
-    minimatrix_fmadd64(4, 4, &a_arr, &b_arr, &mut c_arr);
+    minimatrix_fmadd64(4, &a_arr, &b_arr, &mut c_arr);
     test_equality(4, 4, &c_arr, &res_arr);
 }
 
@@ -57,11 +56,36 @@ fn test_minimatrix_unaligned() {
                        096.000,  825.50,  50.500,  49.5,
                        124.125,  335.25, 257.875, 774.0);
 
-    minimatrix_fmadd64(4, 4, &a_arr, &b_arr, &mut c_arr);
+    minimatrix_fmadd64(4, &a_arr, &b_arr, &mut c_arr);
 
     test_equality(4, 4, &c_arr, &res_arr);
 }
 
+#[test]
+fn test_minimatrix_random() {
+    for _i in 0 .. 10 {
+        let a = random_array(4, 4, -100.0, 100.0);
+        let b = random_array(4, 4, -100.0, 100.0);
+        let mut c = random_array(4, 4, -100.0, 100.0);
+
+        let aarr = Array::from_vec(a.clone()).into_shape((4, 4)).unwrap();
+        let barr = Array::from_vec(b.clone()).into_shape((4, 4)).unwrap();
+        let mut carr = Array::from_vec(c.clone()).into_shape((4, 4)).unwrap();
+
+        general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+
+        let slice = carr.as_slice().unwrap();
+        minimatrix_fmadd64(4, &a, &b, &mut c);
+        test_equality(4, 4, &c, &slice);
+    }
+}
+
+#[test]
+fn matrix_madd_8x8() {
+    matrix_madd_nxm(8,8);
+}
+
+/*
 #[test]
 fn matrix_madd_1to5() {
     for n in 1 .. 6 {
@@ -75,6 +99,7 @@ fn matrix_madd_test() {
         matrix_madd_nxm(n * 4, n * 4);
     }
 }
+*/
 
 #[test]
 fn matrix_1024_test() {
@@ -86,24 +111,23 @@ pub fn matrix_madd_nxm(n: usize, m: usize) {
     let b = random_array(n, m, -100.0, 100.0);
     let mut c = random_array(n, m, -100.0, 100.0);
     
-    let a_arr = a.clone();
-    let b_arr = b.clone();
-    let mut c_arr = c.clone();
+    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
 
-    unsafe { 
-        dgemm(n, m, n, 1.0,
-              &a_arr[0] as *const f64, 4, 4,
-              &b_arr[0] as *const f64, 4, 4,
-              1.0, &mut c_arr[0] as *mut f64, 4, 4)
-    }
-
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
     matrix_madd(n, m, &a, &b, &mut c);
 
-    test_equality(n, m, &c, &c_arr);
+    test_equality(n, m, &c, &slice);
 }
 
 fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     for i in 0 .. rows * cols {
+        if !floateq(c[i], correct[i]) {
+            panic!("{}, {} != {}", i, c[i], correct[i]);
+        }
         assert!(floateq(c[i], correct[i]));
     }
 }
