@@ -83,8 +83,8 @@ fn matrix_madd_test() {
 */
 
 #[test]
-fn matrix_1024_test() {
-    matrix_madd_nxm(1024, 1024);
+fn matrix_256_test() {
+    matrix_madd_nxm(256, 256);
 }
 
 pub fn matrix_madd_nxm(n: usize, m: usize) {

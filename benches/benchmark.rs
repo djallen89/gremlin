@@ -8,9 +8,9 @@ use ndarray::linalg::general_mat_mul;
 
 use criterion::{Benchmark, Criterion};
 
-fn benchdgemm(crit: &mut Criterion) {
-    let n = 4*1;
-    let m = 4*1;
+fn benchnxn(crit: &mut Criterion, i: usize) {
+    let n = i;
+    let m = i;
 
     let my_name = format!("my dgemm {}sq", n);
     let other_name = format!("ndarray {}sq", n);
@@ -35,6 +35,27 @@ fn benchdgemm(crit: &mut Criterion) {
     crit.bench("dgemm", bench_def);
 }
 
-criterion_group!(benches, benchdgemm );
+fn bench4x4(crit: &mut Criterion) {
+    benchnxn(crit, 4);
+}
+
+fn bench16x16(crit: &mut Criterion) {
+    benchnxn(crit, 16);
+}
+
+fn bench32x32(crit: &mut Criterion) {
+    benchnxn(crit, 32);
+}
+
+fn bench256x256(crit: &mut Criterion) {
+    benchnxn(crit, 256);
+}
+
+fn bench1024x1024(crit: &mut Criterion) {
+    benchnxn(crit, 1024);
+}
+
+criterion_group!(benches, bench4x4, bench16x16, bench32x32,
+                 bench256x256, bench1024x1024);
 criterion_main!(benches);
 

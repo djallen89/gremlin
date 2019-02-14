@@ -10,7 +10,6 @@ use rand::prelude::*;
 use core::arch::x86_64::__m256d;
 use core::arch::x86_64::_mm256_broadcast_sd;
 use core::arch::x86_64::_mm256_setzero_pd;
-use core::arch::x86_64::{_mm256_load_pd,  _mm256_store_pd};
 use core::arch::x86_64::{_mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
 use utilities::*;
@@ -71,30 +70,18 @@ unsafe fn folding_dot_prod(row: &[f64], col: &[f64]) -> f64 {
 
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
-unsafe fn scalar_vec_fmadd_f64u(a_elt: &f64, b_row: &[f64], c_row: &mut [f64]) {
+unsafe fn scalar_vec_fmadd_f64u(a_elt: &f64, b_row: *const f64, c_row: *mut f64) {
     let a: __m256d = _mm256_broadcast_sd(a_elt);
-    let b: __m256d = _mm256_loadu_pd(&b_row[0] as *const f64);
-    let mut c: __m256d = _mm256_loadu_pd(&c_row[0] as *const f64);
+    let b: __m256d = _mm256_loadu_pd(b_row);
+    let mut c: __m256d = _mm256_loadu_pd(c_row as *const f64);
     
     c = _mm256_fmadd_pd(a, b, c);
-    _mm256_storeu_pd(&mut c_row[0] as *mut f64, c);
-}
-
-#[target_feature(enable = "avx2")]
-#[cfg(any(target_arch = "x86_64"))]
-unsafe fn scalar_vec_fmadd_f64a(a_elt: &f64, b_row: &[f64], c_row: &mut [f64]) {
-    let a: __m256d = _mm256_broadcast_sd(a_elt);
-    let b: __m256d = _mm256_load_pd(&b_row[0] as *const f64);
-    let mut c: __m256d = _mm256_load_pd(&c_row[0] as *const f64);
-    
-    c = _mm256_fmadd_pd(a, b, c);
-    _mm256_store_pd(&mut c_row[0] as *mut f64, c);
+    _mm256_storeu_pd(c_row, c);
 }
 
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
 pub fn minimatrix_fmadd64(n_cols: usize, a: &[f64], b: &[f64], c: &mut [f64]) {
-    /* For 4x4 matrices, the first row of AB + C can be
-     * represented as:
+    /* For 4x4 matrices, the first row of AB + C can be represented as:
      *
      * A11B11 + A12B21 + A13B31 + A14B41 + C11,
      * A11B12 + A12B22 + A13B32 + A14B42 + C12, 
@@ -108,30 +95,25 @@ pub fn minimatrix_fmadd64(n_cols: usize, a: &[f64], b: &[f64], c: &mut [f64]) {
      * A13B31 + C11 = C11, A13B32 + C12 = C12, A13B33 + C13 = C13, A13B34 + C14 = C14,
      * A14B41 + C11 = C11, A14B42 + C12 = C12, A14B43 + C13 = C13, A14B44 + C14 = C14,
      * 
-     * Generalizing this, one row (or 4 columns of one row) of C can
-     * be calculated in 4 iterations by the successive product of an
-     * element from the corresponding row of A and a row of B; row(C,
-     * i) = A[i][j]*row(B, j) + row(C, i)
+     * Generalizing this, one row (or 4 columns of one row) of C can be
+     * calculated in 4 iterations 
+     * row(C, i) = A[i][j]*row(B, j) + row(C, i)
      *
      * Iterating over the rows of C and applying this method, 4
-     * columns of 4 rows C can be calculated in this way. This is more
-     * efficient than the naive approach because we can minimize cache
-     * misses and maximize the use of the cache as we go through the
-     * matrices. */
+     * columns of 4 rows C can be calculated in a tight loop. */
+    
     for row in 0 .. 4 {
-        let row_range = get_row(row, 4, n_cols);
-        let mut c_row = &mut c[row_range];
+        let c_elt = get_elt(row, 0, n_cols);
+        let mut c_row = &mut c[c_elt] as *mut f64;
 
         for col in 0 .. 4 {
-            let b_row_range = get_row(col, 4, n_cols);
-            let b_row = &b[b_row_range];
+            //let b_row_range = get_row(col, 4, n_cols);
+            let b_elt = get_elt(col, 0, n_cols);
+            let b_row = &b[b_elt] as *const f64;
             let aidx = get_elt(row, col, n_cols);
-            if aidx == a.len() {
-                panic!("{}*{}+{}={}", row, n_cols, col, row * n_cols + col);
-            }
             let a_elt = &a[aidx];
             unsafe { 
-                scalar_vec_fmadd_f64u(a_elt, b_row, &mut c_row);
+                scalar_vec_fmadd_f64u(a_elt, b_row, c_row);
             }
         }
     }
