@@ -17,3 +17,4 @@ pub fn get_chunk(row: usize, col: usize, rows: usize, cols: usize, n_cols: usize
     let end = begin + (rows - 1) * n_cols + cols;
     begin .. end
 }
+

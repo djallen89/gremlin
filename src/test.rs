@@ -62,25 +62,6 @@ fn test_minimatrix_unaligned() {
 }
 
 #[test]
-fn test_minimatrix_random() {
-    for _i in 0 .. 10 {
-        let a = random_array(4, 4, -100.0, 100.0);
-        let b = random_array(4, 4, -100.0, 100.0);
-        let mut c = random_array(4, 4, -100.0, 100.0);
-
-        let aarr = Array::from_vec(a.clone()).into_shape((4, 4)).unwrap();
-        let barr = Array::from_vec(b.clone()).into_shape((4, 4)).unwrap();
-        let mut carr = Array::from_vec(c.clone()).into_shape((4, 4)).unwrap();
-
-        general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
-
-        let slice = carr.as_slice().unwrap();
-        minimatrix_fmadd64(4, &a, &b, &mut c);
-        test_equality(4, 4, &c, &slice);
-    }
-}
-
-#[test]
 fn matrix_madd_8x8() {
     matrix_madd_nxm(8,8);
 }
@@ -118,7 +99,7 @@ pub fn matrix_madd_nxm(n: usize, m: usize) {
     general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
     let slice = carr.as_slice().unwrap();
     
-    matrix_madd(n, m, &a, &b, &mut c);
+    matrix_madd(n, m, n, &a, &b, &mut c);
 
     test_equality(n, m, &c, &slice);
 }

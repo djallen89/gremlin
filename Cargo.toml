@@ -15,6 +15,10 @@ matrixmultiply = "0.2.2"
 [dev-dependencies]
 criterion = "0.2.10"
 
+[lib]
+name = "gremlin_lib"
+path = "src/lib/mod.rs"
+
 [[bench]]
 name = "benchmark"
 harness = false

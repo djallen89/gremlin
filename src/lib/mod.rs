@@ -9,6 +9,7 @@ mod utilities;
 use rand::prelude::*;
 use core::arch::x86_64::__m256d;
 use core::arch::x86_64::_mm256_broadcast_sd;
+use core::arch::x86_64::_mm256_setzero_pd;
 use core::arch::x86_64::{_mm256_load_pd,  _mm256_store_pd};
 use core::arch::x86_64::{_mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
@@ -30,8 +31,42 @@ impl FMADD for f64 {
     }
 }
 
-pub fn madd<T: FMADD>(a: T, b: T, c: &mut T) {
+fn madd<T: FMADD>(a: T, b: T, c: &mut T) {
     c.fmadd(a, b);
+}
+
+fn dot_product_add<T: FMADD + Copy>(a: &[T], b: &[T], c: &mut T) {
+    let mut i = 0;
+    while i < a.len() {
+        c.fmadd(a[i], b[i]);
+        i += 1;
+    }
+}
+
+#[target_feature(enable = "avx2")]
+#[cfg(any(target_arch = "x86_64"))]
+unsafe fn folding_dot_prod(row: &[f64], col: &[f64]) -> f64 {
+    let final_max = row.len();
+    let first_max = final_max - final_max % 4;
+
+    let mut sum = 0.0;
+    let mut store: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
+    let mut a: __m256d;
+    let mut b: __m256d;
+    let mut c: __m256d = _mm256_setzero_pd();
+    
+    for i in (0 .. first_max).step_by(4) {
+        a = _mm256_loadu_pd(&row[i] as *const f64);
+        b = _mm256_loadu_pd(&col[i] as *const f64);
+        c = _mm256_fmadd_pd(a, b, c);
+    }
+
+    _mm256_storeu_pd(&mut store[0] as *mut f64, c);
+    sum += store[0] + store[1] + store[2] + store[3];
+    for i in first_max .. final_max {
+        sum.fmadd(row[i], col[i]);
+    }
+    sum
 }
 
 #[target_feature(enable = "avx2")]
@@ -102,37 +137,69 @@ pub fn minimatrix_fmadd64(n_cols: usize, a: &[f64], b: &[f64], c: &mut [f64]) {
     }
 }
 
-pub fn matrix_madd(n_cols: usize, m_rows: usize, a: &[f64], b: &[f64], c: &mut [f64]) {
-    if n_cols == 1 && m_rows == 1 {
-        c[0] = a[0]*b[0] + c[0];
-        return;
+pub fn matrix_madd(a_rows: usize, b_cols: usize, m_dim: usize,
+                   a: &[f64], b: &[f64], c: &mut [f64]) {
+    /* Check dimensionality */
+    let a_len = a.len();
+    let b_len = b.len();
+    let c_len = c.len();
+    /* Check for zeros before checking dimensions to prevent division by zero */
+    match (a_rows, b_cols, m_dim, a_len, b_len, c_len) {
+        (0, _, _, _, _, _) |  (_, 0, _, _, _, _) | (_, _, 0, _, _, _) |
+        (_, _, _, 0, _, _) | (_, _, _, _, 0, _) => {
+            panic!("Cannot do matrix multiplication where A or B have 0 elements")
+        }
+        (_, _, _, _, _, 0) => panic!("Cannot do matrix multiplication where C has 0 elements"),
+        _ => {}
     }
-    /* 4col x 4row block of C += (n_cols x 4row of A)(4col * m_rows of B) */
-    let row_stripes = m_rows - m_rows % 4;
-    let col_pillars = n_cols - n_cols % 4;
+
+    if a_len / a_rows != m_dim {
+        panic!("{}\n{}*{} == {} != {}",
+               "Dimensionality of A does not match parameters.",
+               a_rows, m_dim, a_rows * m_dim, a_len);
+    }
+
+    if b_len / b_cols != m_dim {
+        panic!("{}\n{}*{} == {} != {}",
+               "Dimensionality of B does not match parameters.",
+               b_cols, m_dim, b_cols * m_dim, b_len);
+    }
+
+    if c_len / a_rows != b_cols {
+        panic!("{}\n{}*{} == {} != {}",
+               "Dimensionality of C does not match parameters.",
+               a_rows, b_cols, a_rows * b_cols, c_len);
+    }
+    
+    if b_cols == 1 && a_rows == 1 {
+        return dot_product_add(a, b, &mut c[0]);
+    }
+    /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
+    let row_stripes = a_rows - a_rows % 4;
+    let col_pillars = b_cols - b_cols % 4;
     let blocks = col_pillars;
 
-    if n_cols >= 4 && n_cols % 4 == 0 {
+    if b_cols >= 4 && b_cols % 4 == 0 {
         for stripe in (0 .. row_stripes).step_by(4) {
             for pillar in (0 .. col_pillars).step_by(4) {
-                let c_chunk_range = get_chunk(stripe, pillar, 4, 4, n_cols);
+                let c_chunk_range = get_chunk(stripe, pillar, 4, 4, b_cols);
                 let mut c_chunk = &mut c[c_chunk_range];
                 
                 for block in (0 .. blocks).step_by(4) {
-                    let a_chunk_range = get_chunk(stripe, block, 4, 4, n_cols);
-                    let b_chunk_range = get_chunk(block, pillar, 4, 4, n_cols);
+                    let a_chunk_range = get_chunk(stripe, block, 4, 4, b_cols);
+                    let b_chunk_range = get_chunk(block, pillar, 4, 4, b_cols);
 
                     let a_chunk = &a[a_chunk_range];
                     let b_chunk = &b[b_chunk_range];
-                    minimatrix_fmadd64(n_cols, a_chunk, b_chunk, &mut c_chunk);
+                    minimatrix_fmadd64(b_cols, a_chunk, b_chunk, &mut c_chunk);
                 }
             }
         }
     } else {
-        for i in 0 .. m_rows {
-            for j in 0 .. n_cols {
-                for k in 0 .. n_cols {
-                    c[i * n_cols + j] += a[i * n_cols + k] * b[k * n_cols + j];
+        for i in 0 .. a_rows {
+            for j in 0 .. b_cols {
+                for k in 0 .. b_cols {
+                    c[i * b_cols + j].fmadd(a[i * b_cols + k], b[k * b_cols + j]);
                 }
             }
         }
