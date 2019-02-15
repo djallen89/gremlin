@@ -8,7 +8,7 @@ fn matrix_madd_8x8() {
     matrix_madd_nxm(8,8);
 }
 
-/*
+
 #[test]
 fn matrix_madd_1to5() {
     for n in 1 .. 6 {
@@ -18,11 +18,11 @@ fn matrix_madd_1to5() {
 
 #[test]
 fn matrix_madd_test() {
-    for n in 1 .. 8 {
-        matrix_madd_nxm(n * 4, n * 4);
+    for n in 1 .. 33 {
+        matrix_madd_nxm(n, n);
     }
 }
-*/
+
 
 #[test]
 fn matrix_4sq_test() {
@@ -33,6 +33,33 @@ fn matrix_4sq_test() {
 fn matrix_256sq_test() {
     matrix_madd_nxm(256, 256);
 }
+
+#[test]
+fn matrix_480_sq_test() {
+    matrix_madd_nxm(480, 480);
+}
+
+#[test]
+fn matrix_736sq_test() {
+    matrix_madd_nxm(736, 736);
+}
+
+#[test]
+fn matrix_768sq_test() {
+    matrix_madd_nxm(768, 768);
+}
+
+#[test]
+fn matrix_992_sq_test() {
+    matrix_madd_nxm(992, 992);
+}
+
+
+#[test]
+fn matrix_1024sq_test() {
+    matrix_madd_nxm(1024, 1024);
+}
+
 
 #[test]
 fn matrix_2048x1_test() {

@@ -84,6 +84,23 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
             let a_ptr = &a[0] as *const f64;
             let b_ptr = &b[0] as *const f64;
             let c_ptr = &mut c[0] as *mut f64;
+
+            if n_rows <= 4 && p_cols <= 4 && m_dim <= 4 {
+                return minimatrix_fmadd64(m_dim, a_ptr, b_ptr, c_ptr);
+            }
+
+            if n_rows <= 32 && p_cols <= 32 && m_dim <= 32 {
+                return matrix_madd_inner_block(m_dim,
+                                               n_rows, p_cols, m_dim,
+                                               a_ptr, b_ptr, c_ptr);
+            }
+            // (* 32 8) 256
+            if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
+                return matrix_madd_block(m_dim,
+                                         n_rows, p_cols, m_dim,
+                                         a_ptr, b_ptr, c_ptr);
+            }
+            
             recursive_matrix_mul(p_cols, m_dim,
                                  n_rows, p_cols, m_dim,
                                  a_ptr, b_ptr, c_ptr);
@@ -99,60 +116,94 @@ unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
         return minimatrix_fmadd64(m_dim_orig, a, b, c);
     }
 
-    match max(max(n_rows, p_cols), m_dim) {
-        n if n == n_rows => {
-            let n_rows_new = n_rows / 2;
-            let aidx2 = n_rows_new * m_dim_orig;
-            let a_1 = a.offset(0);
-            let a_2 = a.offset(aidx2 as isize);
-            let cidx2 = n_rows_new * p_cols_orig;
-            let c_1 = c.offset(0);
-            let c_2 = c.offset(cidx2 as isize);
-            recursive_matrix_mul(p_cols_orig, m_dim_orig,
-                                 n_rows_new, p_cols, m_dim,
-                                 a_1, b, c_1);
-            recursive_matrix_mul(p_cols_orig, m_dim_orig,
-                                 n_rows_new, p_cols, m_dim,
-                                 a_2, b, c_2);
-        },
-        
-        p if p == p_cols => {
-            let p_cols_new = p_cols / 2;
-            let bidx2 = p_cols_new;
-            let b_1 = b.offset(0);
-            let b_2 = b.offset(bidx2 as isize);
-            let cidx2 = p_cols_new;
-            let c_1 = c.offset(0);
-            let c_2 = c.offset(cidx2 as isize);
-            recursive_matrix_mul(p_cols_orig, m_dim_orig,
-                                 n_rows, p_cols_new, m_dim,
-                                 a, b_1, c_1);
-            recursive_matrix_mul(p_cols_orig, m_dim_orig,
-                                 n_rows, p_cols_new, m_dim,
-                                 a, b_2, c_2);
-        },
-        
-        _ => {
-            let m_dim_new = m_dim / 2;
-            let aidx2 = m_dim_new;
-            let a_1 = a.offset(0);
-            let a_2 = a.offset(aidx2 as isize);
+    if n_rows <= 32 && p_cols <= 32 && m_dim <= 32 {
+        return matrix_madd_inner_block(m_dim_orig,
+                                       n_rows, p_cols, m_dim,
+                                       a, b, c);
+    }
 
-            let bidx2 = m_dim_new * p_cols_orig;
-            let b_1 = b.offset(0);
-            let b_2 = b.offset(bidx2 as isize);
-            recursive_matrix_mul(p_cols_orig, m_dim_orig,
-                                 n_rows, p_cols, m_dim_new,
-                                 a_1, b_1, c);
-            recursive_matrix_mul(p_cols_orig, m_dim_orig,
-                                 n_rows, p_cols, m_dim_new,
-                                 a_2, b_2, c);
+    if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
+        return matrix_madd_block(m_dim_orig,
+                                 n_rows, p_cols, m_dim,
+                                 a, b, c);
+    }
+
+    let maxn = max(max(n_rows, p_cols), m_dim);
+    if maxn == n_rows {
+        let n_rows_new = n_rows / 2;
+        let aidx2 = n_rows_new * m_dim_orig;
+        let a_2 = a.offset(aidx2 as isize);
+        let cidx2 = n_rows_new * p_cols_orig;
+        let c_2 = c.offset(cidx2 as isize);
+        recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                             n_rows_new, p_cols, m_dim,
+                             a, b, c);
+        recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                             n_rows_new, p_cols, m_dim,
+                             a_2, b, c_2);
+    } else if maxn == p_cols {
+        let p_cols_new = p_cols / 2;
+        let b_2 = b.offset(p_cols_new as isize);
+        let c_2 = c.offset(p_cols_new as isize);
+        recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                             n_rows, p_cols_new, m_dim,
+                             a, b, c);
+        recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                             n_rows, p_cols_new, m_dim,
+                             a, b_2, c_2);
+    } else {
+        let m_dim_new = m_dim / 2;
+        let a_2 = a.offset(m_dim_new as isize);
+        let bidx2 = m_dim_new * p_cols_orig;
+        let b_2 = b.offset(bidx2 as isize);
+        
+        recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                             n_rows, p_cols, m_dim_new,
+                             a, b, c);
+        recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                             n_rows, p_cols, m_dim_new,
+                             a_2, b_2, c);
+    }
+
+}
+
+unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_blocks: usize,
+                                  a: *const f64, b: *const f64, c: *mut f64) {
+    /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
+    let miniblock = match m_dim {
+        256 => 128,
+        257 ... 480 => 64,
+        512 => 8,
+        513 ... 767 => 64,
+        768 => 8,
+        768 ... 1023 => 64,
+        _ => 8
+    };
+    let row_stripes = a_rows - a_rows % miniblock;
+    let col_pillars = b_cols - b_cols % miniblock;
+    let blocks = col_pillars;
+
+    for pillar in (0 .. col_pillars).step_by(miniblock) {
+        for stripe in (0 .. row_stripes).step_by(miniblock) {
+            let c_idx = get_elt(stripe, pillar, m_dim);
+            let c_chunk = c.offset(c_idx as isize);
+            
+            for block in (0 .. blocks).step_by(miniblock) {
+                let a_idx = get_elt(stripe, block, m_dim);
+                let b_idx = get_elt(block, pillar, m_dim);
+                let a_chunk = a.offset(a_idx as isize);
+                let b_chunk = b.offset(b_idx as isize);
+                matrix_madd_inner_block(m_dim,
+                                        miniblock, miniblock, miniblock,
+                                        a_chunk, b_chunk, c_chunk);
+            }
         }
     }
 }
 
-unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_blocks: usize,
-                                a: *const f64, b: *const f64, c: *mut f64) {
+#[inline(always)]
+unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_blocks: usize,
+                                  a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
     const MINIBLOCK: usize = 4;
     let row_stripes = a_rows - a_rows % MINIBLOCK;
@@ -161,14 +212,13 @@ unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_block
 
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
         for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
+
             let c_idx = get_elt(stripe, pillar, m_dim);
-            println!("Subblock C = {}", c_idx);
             let c_chunk = c.offset(c_idx as isize);
             
             for block in (0 .. blocks).step_by(MINIBLOCK) {
                 let a_idx = get_elt(stripe, block, m_dim);
                 let b_idx = get_elt(block, pillar, m_dim);
-                println!("    Subpillar A = {}, B = {}", a_idx, b_idx);
                 let a_chunk = a.offset(a_idx as isize);
                 let b_chunk = b.offset(b_idx as isize);
                 minimatrix_fmadd64(m_dim, a_chunk, b_chunk, c_chunk);
@@ -179,9 +229,9 @@ unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_block
     for i in row_stripes .. a_rows {
         for j in 0 .. b_cols {
             for k in 0 .. b_cols {
-                madd(a.offset((i * b_cols + k) as isize),
-                     b.offset((k * b_cols + j) as isize),
-                     c.offset((i * b_cols + j) as isize));
+                madd(a.offset((i * m_dim + k) as isize),
+                     b.offset((k * m_dim + j) as isize),
+                     c.offset((i * m_dim + j) as isize));
             }
         }
     }
