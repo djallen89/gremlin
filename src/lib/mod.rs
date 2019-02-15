@@ -116,7 +116,7 @@ unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
         return minimatrix_fmadd64(m_dim_orig, a, b, c);
     }
 
-    if (n_rows <= 32 && p_cols <= 32 && m_dim <= 32) || m_dim_orig == 508 || m_dim_orig == 516 {
+    if (n_rows <= 32 && p_cols <= 32 && m_dim <= 32) || m_dim_orig % 32 != 0 {
         return matrix_madd_inner_block(m_dim_orig,
                                        n_rows, p_cols, m_dim,
                                        a, b, c);
@@ -170,25 +170,17 @@ unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
 unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_blocks: usize,
                                   a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
-    let miniblock = match m_dim {
-        256 => 128,
-        //        257 ... 480 => 64,
-        512 => 8,
-        //513 ... 767 => 64,
-        768 => 8,
-        768 ... 1023 => 64,
-        _ => 8
-    };
+    let miniblock = 128;
     let row_stripes = a_rows - a_rows % miniblock;
     let col_pillars = b_cols - b_cols % miniblock;
     let blocks = col_pillars;
 
     for pillar in (0 .. col_pillars).step_by(miniblock) {
-        for stripe in (0 .. row_stripes).step_by(miniblock) {
-            let c_idx = get_elt(stripe, pillar, m_dim);
-            let c_chunk = c.offset(c_idx as isize);
-            
-            for block in (0 .. blocks).step_by(miniblock) {
+        for block in (0 .. blocks).step_by(miniblock) {
+            for stripe in (0 .. row_stripes).step_by(miniblock) {
+                let c_idx = get_elt(stripe, pillar, m_dim);
+                let c_chunk = c.offset(c_idx as isize);
+                    
                 let a_idx = get_elt(stripe, block, m_dim);
                 let b_idx = get_elt(block, pillar, m_dim);
                 let a_chunk = a.offset(a_idx as isize);
@@ -211,12 +203,13 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, _f
     let blocks = col_pillars;
 
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
-        for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
 
-            let c_idx = get_elt(stripe, pillar, m_dim);
-            let c_chunk = c.offset(c_idx as isize);
+        for block in (0 .. blocks).step_by(MINIBLOCK) {
+
+            for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
+                let c_idx = get_elt(stripe, pillar, m_dim);
+                let c_chunk = c.offset(c_idx as isize);
             
-            for block in (0 .. blocks).step_by(MINIBLOCK) {
                 let a_idx = get_elt(stripe, block, m_dim);
                 let b_idx = get_elt(block, pillar, m_dim);
                 let a_chunk = a.offset(a_idx as isize);
@@ -225,17 +218,6 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, _f
             }
         }
     }
-
-    for i in row_stripes .. a_rows {
-        for j in 0 .. b_cols {
-            for k in 0 .. b_cols {
-                madd(a.offset((i * m_dim + k) as isize),
-                     b.offset((k * m_dim + j) as isize),
-                     c.offset((i * m_dim + j) as isize));
-            }
-        }
-    }
-
 }
 
 #[target_feature(enable = "avx2")]

@@ -58,7 +58,7 @@ fn matrix_516_sq_test() {
 fn matrix_736sq_test() {
     matrix_madd_nxm(736, 736);
 }
-
+/*
 #[test]
 fn matrix_768sq_test() {
     matrix_madd_nxm(768, 768);
@@ -69,13 +69,16 @@ fn matrix_992_sq_test() {
     matrix_madd_nxm(992, 992);
 }
 
-
 #[test]
 fn matrix_1024sq_test() {
     matrix_madd_nxm(1024, 1024);
 }
 
-
+#[test]
+fn matrix_1408_sq_test() {
+    matrix_madd_nxm(1408, 1408);
+}
+*/
 #[test]
 fn matrix_2048x1_test() {
     matrix_madd_nmp(1, 2048, 1);
