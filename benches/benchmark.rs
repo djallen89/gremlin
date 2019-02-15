@@ -29,9 +29,9 @@ fn benchnxn(crit: &mut Criterion, i: usize) {
         my_name, move |bch| bch.iter(|| {
             matrix_madd(n, m, n, &a, &b, &mut c)
         }))
-        .with_function(other_name, move |bch| bch.iter(|| {
-            general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
-        }))
+        //.with_function(other_name, move |bch| bch.iter(|| {
+            //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
+        //}))
         .sample_size(10);
     
     crit.bench("dgemm", bench_def);

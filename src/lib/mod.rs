@@ -203,9 +203,7 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, _f
     let blocks = col_pillars;
 
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
-
         for block in (0 .. blocks).step_by(MINIBLOCK) {
-
             for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
                 let c_idx = get_elt(stripe, pillar, m_dim);
                 let c_chunk = c.offset(c_idx as isize);
