@@ -57,19 +57,19 @@ fn bench1024x1024(crit: &mut Criterion) {
 
 fn bench2048x1(crit: &mut Criterion) {
     let n = 1;
-    let m = 1;
-    let p = 2048;
+    let m = 2048;
+    let p = 1;
     
-    let my_name = format!("my dgemm {}x1", p);
-    let other_name = format!("ndarray {}x1", p);
+    let my_name = format!("my dgemm {}x1", m);
+    let other_name = format!("ndarray {}x1", m);
 
-    let a: Vec<f64> = random_array(n, p, -100.0, 100.0);
-    let b = random_array(p, m, -100.0, 100.0);
-    let mut c = random_array(n, m, -100.0, 100.0);
+    let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
+    let b = random_array(m, p, -100.0, 100.0);
+    let mut c = random_array(n, p, -100.0, 100.0);
     
-    let aarr = Array::from_vec(a.clone()).into_shape((n, p)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((p, m)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
+    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
     
     let bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {

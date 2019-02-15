@@ -1,7 +1,9 @@
 extern crate rand;
 
 use rand::prelude::*;
-use std::ops::Range;
+use ndarray::Array;
+use ndarray::linalg::general_mat_mul;
+use super::matrix_madd;
 
 #[inline(always)]
 pub fn get_elt(row: usize, col: usize, n_cols: usize) -> usize {
@@ -43,5 +45,52 @@ pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
     }
 
     return arr;
+}
+pub fn matrix_madd_nxm(n: usize, m: usize) {
+    let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
+    let b = random_array(n, m, -100.0, 100.0);
+    let mut c = random_array(n, m, -100.0, 100.0);
+    
+    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
+
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
+    matrix_madd(n, m, n, &a, &b, &mut c);
+
+    test_equality(n, m, &c, &slice);
+}
+
+pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
+    let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
+    let b = random_array(m, p, -100.0, 100.0);
+    let mut c = random_array(n, p, -100.0, 100.0);
+    
+    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
+
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
+    matrix_madd(n, m, p, &a, &b, &mut c);
+
+    test_equality(n, p, &c, &slice);
+}
+
+fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
+    for i in 0 .. rows * cols {
+        if !floateq(c[i], correct[i]) {
+            if rows * cols <= 16 {
+                for i in 0 .. rows * cols {
+                    println!("{} != {}",  c[i], correct[i]);
+                }
+            }
+            panic!("{}, {} != {}", i, c[i], correct[i]);
+        }
+        assert!(floateq(c[i], correct[i]));
+    }
 }
 

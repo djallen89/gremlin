@@ -4,13 +4,14 @@ extern crate ndarray;
 
 mod utilities;
 
-use std::cmp::min;
+use std::cmp::{max};
 use core::arch::x86_64::__m256d;
 use core::arch::x86_64::_mm256_broadcast_sd;
 use core::arch::x86_64::_mm256_setzero_pd;
 use core::arch::x86_64::{_mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
 pub use utilities::{get_elt, random_array, floateq};
+pub use utilities::{matrix_madd_nxm, matrix_madd_nmp};
 
 pub trait FMADD {
     fn fmadd(&mut self, a: Self, b: Self);
@@ -34,14 +35,17 @@ unsafe fn madd(a: *const f64, b: *const f64, c: *mut f64) {
     *c = res;
 }
 
-pub fn matrix_madd(a_rows: usize, b_cols: usize, m_dim: usize,
+/// Performs C <= AB + C, where A is a matrix of n rows by m columns,
+/// B is a matrix of m rows by p columns, and C is a matrix of n rows
+/// by p columns.
+pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
                    a: &[f64], b: &[f64], c: &mut [f64]) {
     /* Check dimensionality */
     let a_len = a.len();
     let b_len = b.len();
     let c_len = c.len();
     /* Check for zeros before checking dimensions to prevent division by zero */
-    match (a_rows, b_cols, m_dim, a_len, b_len, c_len) {
+    match (n_rows, p_cols, m_dim, a_len, b_len, c_len) {
         (0, _, _, _, _, _) |  (_, 0, _, _, _, _) | (_, _, 0, _, _, _) |
         (_, _, _, 0, _, _) | (_, _, _, _, 0, _) => {
             panic!("Cannot do matrix multiplication where A or B have 0 elements")
@@ -50,68 +54,104 @@ pub fn matrix_madd(a_rows: usize, b_cols: usize, m_dim: usize,
         _ => {}
     }
 
-    if a_len / a_rows != m_dim {
+    if a_len / n_rows != m_dim {
+        /* A is n * m*/
         panic!("{}\n{}*{} == {} != {}",
                "Dimensionality of A does not match parameters.",
-               a_rows, m_dim, a_rows * m_dim, a_len);
-    }
-
-    if b_len / b_cols != m_dim {
+               n_rows, m_dim, n_rows * m_dim, a_len);
+    } else if b_len / p_cols != m_dim {
+        /* B is m * p */
         panic!("{}\n{}*{} == {} != {}",
                "Dimensionality of B does not match parameters.",
-               b_cols, m_dim, b_cols * m_dim, b_len);
-    }
-
-    if c_len / a_rows != b_cols {
+               p_cols, m_dim, p_cols * m_dim, b_len);
+    } else if c_len / n_rows != p_cols {
+        /* C is n * p */
         panic!("{}\n{}*{} == {} != {}",
                "Dimensionality of C does not match parameters.",
-               a_rows, b_cols, a_rows * b_cols, c_len);
+               n_rows, p_cols, n_rows * p_cols, c_len);
     }
 
     unsafe {
-        if b_cols == 1 && a_rows == 1 && m_dim >= 4 {
-            return folding_dot_prod(a, b, &mut c[0]);
+        if p_cols == 1 && n_rows == 1 {
+            if m_dim >= 4 {
+                folding_dot_prod(a, b, &mut c[0]);
+            } else {
+                for i in 0 .. 4 {
+                    c[i].fmadd(a[i], b[i])
+                }
+            }
         } else {
-            /*
             let a_ptr = &a[0] as *const f64;
             let b_ptr = &b[0] as *const f64;
             let c_ptr = &mut c[0] as *mut f64;
-            const BLOCK: usize = 128;
-
-            let row_stripes = a_rows - a_rows % BLOCK;
-            let col_pillars = b_cols - b_cols % BLOCK;
-            let blocks = col_pillars;
-            
-            for stripe in (0 .. row_stripes).step_by(BLOCK) {
-                let subrows = min(BLOCK, a_rows - stripe);
-
-                for pillar in (0 .. col_pillars).step_by(BLOCK) {
-                    let subcols = min(BLOCK, b_cols - pillar);
-                    let c_idx = get_elt(stripe, pillar, b_cols);
-                    let c_chunk = &mut c[c_idx] as *mut f64;
-                    
-                    for block in (0 .. blocks).step_by(BLOCK) {
-                        //let subblock = min(BLOCK, m_dim - block);
-                        let a_idx = get_elt(stripe, block, m_dim);
-                        let b_idx = get_elt(block, pillar, m_dim);
-
-                        let a_chunk = &a[a_idx] as *const f64;
-                        let b_chunk = &b[b_idx] as *const f64;
-                        matrix_madd_block(m_dim, subrows, subcols,
-                                          a_chunk, b_chunk, c_chunk);
-                    }
-                }
-            }
-             */
-            matrix_madd_block(m_dim, a_rows, b_cols,
-                              &a[0] as *const f64,
-                              &b[0] as *const f64,
-                              &mut c[0] as *mut f64);
+            recursive_matrix_mul(p_cols, m_dim,
+                                 n_rows, p_cols, m_dim,
+                                 a_ptr, b_ptr, c_ptr);
         }
     }
 }
 
-unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, 
+unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
+                               n_rows: usize, p_cols: usize, m_dim: usize,
+                               a: *const f64, b: *const f64, c: *mut f64) {
+
+    if n_rows <= 4 && p_cols <= 4 && m_dim <= 4 {
+        return minimatrix_fmadd64(m_dim_orig, a, b, c);
+    }
+
+    match max(max(n_rows, p_cols), m_dim) {
+        n if n == n_rows => {
+            let n_rows_new = n_rows / 2;
+            let aidx2 = n_rows_new * m_dim_orig;
+            let a_1 = a.offset(0);
+            let a_2 = a.offset(aidx2 as isize);
+            let cidx2 = n_rows_new * p_cols_orig;
+            let c_1 = c.offset(0);
+            let c_2 = c.offset(cidx2 as isize);
+            recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                                 n_rows_new, p_cols, m_dim,
+                                 a_1, b, c_1);
+            recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                                 n_rows_new, p_cols, m_dim,
+                                 a_2, b, c_2);
+        },
+        
+        p if p == p_cols => {
+            let p_cols_new = p_cols / 2;
+            let bidx2 = p_cols_new;
+            let b_1 = b.offset(0);
+            let b_2 = b.offset(bidx2 as isize);
+            let cidx2 = p_cols_new;
+            let c_1 = c.offset(0);
+            let c_2 = c.offset(cidx2 as isize);
+            recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                                 n_rows, p_cols_new, m_dim,
+                                 a, b_1, c_1);
+            recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                                 n_rows, p_cols_new, m_dim,
+                                 a, b_2, c_2);
+        },
+        
+        _ => {
+            let m_dim_new = m_dim / 2;
+            let aidx2 = m_dim_new;
+            let a_1 = a.offset(0);
+            let a_2 = a.offset(aidx2 as isize);
+
+            let bidx2 = m_dim_new * p_cols_orig;
+            let b_1 = b.offset(0);
+            let b_2 = b.offset(bidx2 as isize);
+            recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                                 n_rows, p_cols, m_dim_new,
+                                 a_1, b_1, c);
+            recursive_matrix_mul(p_cols_orig, m_dim_orig,
+                                 n_rows, p_cols, m_dim_new,
+                                 a_2, b_2, c);
+        }
+    }
+}
+
+unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_blocks: usize,
                                 a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
     const MINIBLOCK: usize = 4;
@@ -122,15 +162,16 @@ unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize,
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
         for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
             let c_idx = get_elt(stripe, pillar, m_dim);
+            println!("Subblock C = {}", c_idx);
             let c_chunk = c.offset(c_idx as isize);
             
             for block in (0 .. blocks).step_by(MINIBLOCK) {
                 let a_idx = get_elt(stripe, block, m_dim);
                 let b_idx = get_elt(block, pillar, m_dim);
-
+                println!("    Subpillar A = {}, B = {}", a_idx, b_idx);
                 let a_chunk = a.offset(a_idx as isize);
                 let b_chunk = b.offset(b_idx as isize);
-                minimatrix_fmadd64(b_cols, a_chunk, b_chunk, c_chunk);
+                minimatrix_fmadd64(m_dim, a_chunk, b_chunk, c_chunk);
             }
         }
     }
@@ -144,6 +185,7 @@ unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize,
             }
         }
     }
+
 }
 
 #[target_feature(enable = "avx2")]
