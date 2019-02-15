@@ -40,6 +40,21 @@ fn matrix_480_sq_test() {
 }
 
 #[test]
+fn matrix_508_sq_test() {
+    matrix_madd_nxm(508, 508);
+}
+
+#[test]
+fn matrix_512_sq_test() {
+    matrix_madd_nxm(512, 512);
+}
+
+#[test]
+fn matrix_516_sq_test() {
+    matrix_madd_nxm(516, 516);
+}
+
+#[test]
 fn matrix_736sq_test() {
     matrix_madd_nxm(736, 736);
 }

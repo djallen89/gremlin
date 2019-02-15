@@ -116,7 +116,7 @@ unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
         return minimatrix_fmadd64(m_dim_orig, a, b, c);
     }
 
-    if n_rows <= 32 && p_cols <= 32 && m_dim <= 32 {
+    if (n_rows <= 32 && p_cols <= 32 && m_dim <= 32) || m_dim_orig == 508 || m_dim_orig == 516 {
         return matrix_madd_inner_block(m_dim_orig,
                                        n_rows, p_cols, m_dim,
                                        a, b, c);
@@ -172,9 +172,9 @@ unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_block
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
     let miniblock = match m_dim {
         256 => 128,
-        257 ... 480 => 64,
+        //        257 ... 480 => 64,
         512 => 8,
-        513 ... 767 => 64,
+        //513 ... 767 => 64,
         768 => 8,
         768 ... 1023 => 64,
         _ => 8

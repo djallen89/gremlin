@@ -65,8 +65,16 @@ fn bench_480_sq(crit: &mut Criterion) {
     benchnxn(crit, 480);
 }
 
+fn bench_508_sq(crit: &mut Criterion) {
+    benchnxn(crit, 508);
+}
+
 fn bench_512_sq(crit: &mut Criterion) {
     benchnxn(crit, 512);
+}
+
+fn bench_516_sq(crit: &mut Criterion) {
+    benchnxn(crit, 516);
 }
 
 fn bench_544_sq(crit: &mut Criterion) {
@@ -131,9 +139,14 @@ fn bench2048x1(crit: &mut Criterion) {
 //criterion_group!(benches, bench_256_sq, bench_512_sq, bench_768_sq, bench_1024_sq);
 //criterion_group!(benches, bench_1024_sq);
 //criterion_group!(benches, bench_480_sq, bench_736_sq, bench_992_sq);
+//criterion_group!(benches, bench16x16);
+/*
 criterion_group!(benches, bench32x32, bench_224_sq, bench_256_sq, bench_288_sq,
                  bench_480_sq, bench_512_sq, bench_544_sq,
                  bench_736_sq, bench_768_sq, bench_800_sq,
                  bench_992_sq, bench_1056_sq);
+ */
+
+criterion_group!(benches, bench_508_sq, bench_512_sq, bench_516_sq);
 criterion_main!(benches);
 
