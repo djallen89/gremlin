@@ -222,20 +222,22 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, c_
                 minimatrix_fmadd64(m_dim, a_chunk, b_chunk, c_chunk);
             }
             
-            /* Say you have a 5x5 matrix. 
-             * |A11 A12 A13 A14 A15||B11 B12 B13 B14 B15| |C11 C12 C13 C14 C15| 
-             * |A21 A22 A23 A24 A25||B21 B22 B23 B24 B25| |C21 C22 C23 C24 C25| 
-             * |A31 A32 A33 A34 A35||B31 B32 B33 B34 B35|+|C31 C32 C33 C34 C35|
-             * |A41 A42 A43 A44 A45||B41 B42 B43 B44 B45| |C41 C42 C43 C44 C45|
-             * |A51 A52 A53 A54 A55||B51 B52 B53 B54 B55| |C51 C52 C53 C54 C55|
+            /* Say you have a 7x7 matrix. 
+             * |A11A12A13A14A15A16A17||B11B12B13B14B15B16B17| |C11C12C13C14C15C16C17| 
+             * |A21A22A23A24A25A26A27||B21B22B23B24B25B26B27| |C21C22C23C24C25C26C27| 
+             * |A31A32A33A34A35A36A37||B31B32B33B34B35B36B37| |C31C32C33C34C35C36C37|
+             * |A41A42A43A44A45A46A47||B41B42B43B44B45B46B47|+|C41C42C43C44C45C46C47|
+             * |A51A52A53A54A55A56A57||B51B52B53B54B55B56B57| |C51C52C53C54C55C56C57|
+             * |A61A62A63A64A65A66A67||B61B62B63B64B65B66B67| |C61C62C63C64C65C66C67|
+             * |A71A72A73A74A75A76A77||B71B72B73B74B75B76B77| |C71C72C73C74C75C76C77|
              *
              * Then at this point, C has been (partially) handled from
-             * C(1..4),(1..4).  C15 to C45 can be handled by
+             * C(1..4),(1..4).  C15 to C47 can be partially handled by
              *
-             * C15 += A11*B15 + A12*B25 + A13*B35 + A14*B45 | + A15*B55  (later)
-             * C25 += A21*B15 + A22*B25 + A23*B35 + A24*B45 | + A25*B55  (later)
-             * C35 += A31*B15 + A32*B25 + A33*B35 + A34*B45 | + A35*B55  (later)
-             * C45 += A41*B15 + A42*B25 + A43*B35 + A44*B45 | + A45*B55  (later)
+             * C15 += A11*B15 + A12*B25 + A13*B35 + A14*B45 | + A15B55+A16B65+A17B75  (later)
+             * C25 += A21*B15 + A22*B25 + A23*B35 + A24*B45 | + A25B55+A26B65+A27B75  (later)
+             * C35 += A31*B15 + A32*B25 + A33*B35 + A34*B45 | + A35B55+A36B65+A37B75  (later)
+             * C45 += A41*B15 + A42*B25 + A43*B35 + A44*B45 | + A45B55+A46B65+A47B75  (later)
              *
              * However, we can't go past this stripe. We will have to
              * handle row(B, 5+) later. Regardless, This presents
@@ -260,32 +262,33 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, c_
         }
     }
 
-    /* Say you have a 5x5 matrix. 
-     * |A11 A12 A13 A14 A15||B11 B12 B13 B14 B15| |C11 C12 C13 C14 C15| 
-     * |A21 A22 A23 A24 A25||B21 B22 B23 B24 B25| |C21 C22 C23 C24 C25| 
-     * |A31 A32 A33 A34 A35||B31 B32 B33 B34 B35|+|C31 C32 C33 C34 C35|
-     * |A41 A42 A43 A44 A45||B41 B42 B43 B44 B45| |C41 C42 C43 C44 C45|
-     * |A51 A52 A53 A54 A55||B51 B52 B53 B54 B55| |C51 C52 C53 C54 C55|
+    /* Returning to the 7x7 matrix
      *
-     * Then at this point, C has been (partially) handled from
-     * C(1..4),(1..5), so we need to finish up everything:
-     * C11 += A15B51, C12 += A15B52, C13 += A15B53, C14 += A15B54, C15 += A15B55
-     * C21 += A25B51, C22 += A25B52, C23 += A25B53, C24 += A25B54, C25 += A25B55
-     * C31 += A35B51, C32 += A35B52, C33 += A35B53, C34 += A35B54, C35 += A35B55
-     * C41 += A45B51, C42 += A45B52, C43 += A45B53, C44 += A45B54, C45 += A45B55
+     * Then at this point, C has been partially handled from
+     * C(1..4),(1..7), so we need to finish up everything:
+     * C11+=A15B51, C12+=A15B52, C13+=A15B53, C14+=A15B54, C15+=A15B55, C16+=A15B56, C17+=A15B57
+     * C11+=A16B61, C12+=A16B62, C13+=A16B63, C14+=A16B64, C15+=A16B65, C16+=A16B66, C17+=A16B67
+     * C11+=A17B71, C12+=A17B72, C13+=A17B73, C14+=A17B74, C15+=A17B75, C16+=A17B76, C17+=A17B77
      *
-     * And of course the last row of C is the fifth row of A dotted by
-     * each column of B:
-     * C51 += AR5.BC1, C52 += AR5.BC2, C53 += AR5.BC3, C54 += AR5.BC4, C55 += AR5.BC5
+     * C21+=A25B51, C22+=A25B52, C23+=A25B53, C24+=A25B54, C25+=A25B55, C16+=A15B56, C27+=A15B57
+     * ...
+     * C31+=A35B51, C32+=A35B52, C33+=A35B53, C34+=A35B54, C35+=A35B55, C36+=A15B56, C37+=A15B57
+     * ...
+     * C41+=A45B51, C42+=A45B52, C43+=A45B53, C44+=A45B54, C45+=A45B55, C46+=A15B56, C47+=A15B57
+     * This can be restated as Row(C,i) += A(i,5)*Row(B,5) from i = 1 to i = 4 
      */
 
-    if  row_stripes != a_rows {
-        for col in 0 .. 
+    for i in 0 .. row_stripes {
+        /* Row(C, i) += */
     }
-    for row in row_stripes .. a_rows {
-        for col in 0 .. b_cols {
-        }
-    }
+
+    /* And of course the last row of C is the fifth row of A dotted by
+     * each column of B:
+     * C51+=AR5.BC1,C52+=AR5.BC2,C53+=AR5.BC3,C54+=AR5.BC4,C55+=AR5.BC5,C56+=AR5.BC6,C57+=AR5.BC7
+     * C61+=AR6.BC1,C62+=AR6.BC2,C63+=AR6.BC3,C64+=AR6.BC4,C65+=AR6.BC6,C66+=AR6.BC6,C67+=AR6.BC7
+     * C71+=AR7.BC1,C72+=AR7.BC2,C73+=AR7.BC3,C74+=AR7.BC4,C75+=AR7.BC7,C76+=AR7.BC6,C77+=AR7.BC7
+     */
+
 }
 
 #[target_feature(enable = "avx2")]
