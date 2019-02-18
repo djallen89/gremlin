@@ -1,16 +1,12 @@
-#![feature(align_offset)]
-
+//#![feature(align_offset)]
 extern crate ndarray;
 
 mod utilities;
 
-use std::cmp::{max};
-use core::arch::x86_64::__m256d;
-use core::arch::x86_64::_mm256_set_pd;
-use core::arch::x86_64::_mm256_broadcast_sd;
-use core::arch::x86_64::_mm256_setzero_pd;
-use core::arch::x86_64::{_mm256_loadu_pd,  _mm256_storeu_pd};
-use core::arch::x86_64::{_mm256_mul_pd, _mm256_fmadd_pd};
+use std::cmp::max;
+use core::arch::x86_64::{__m256d, _mm256_set_pd, _mm256_broadcast_sd};
+use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd,  _mm256_storeu_pd};
+use core::arch::x86_64::_mm256_fmadd_pd;
 pub use utilities::{get_elt, random_array, floateq};
 pub use utilities::{matrix_madd_n_sq, matrix_madd_nxm, matrix_madd_nmp};
 
@@ -73,7 +69,9 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
     }
 
     unsafe {
-        if p_cols < 4 || n_rows < 4 {
+        if n_rows == 1 && p_cols == 1 && m_dim >= 4 {
+            return folding_dot_prod(a, b, &mut c[0])
+        } else  if p_cols < 4 || n_rows < 4 {
             return small_matrix_mul_add(n_rows, m_dim, p_cols, a, b, c)
         }
 
@@ -86,13 +84,13 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
         }
 
         if n_rows <= 32 && p_cols <= 32 && m_dim <= 32 {
-            return matrix_madd_inner_block(m_dim,
+            return matrix_madd_inner_block(m_dim, p_cols,
                                            n_rows, p_cols, m_dim,
                                            a_ptr, b_ptr, c_ptr);
         }
         // (* 32 8) 256
         if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
-            return matrix_madd_block(m_dim,
+            return matrix_madd_block(m_dim, p_cols,
                                      n_rows, p_cols, m_dim,
                                      a_ptr, b_ptr, c_ptr);
         }
@@ -124,13 +122,13 @@ unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
     }
 
     if (n_rows <= 32 && p_cols <= 32 && m_dim <= 32) || m_dim_orig % 32 != 0 {
-        return matrix_madd_inner_block(m_dim_orig,
+        return matrix_madd_inner_block(m_dim_orig, p_cols_orig,
                                        n_rows, p_cols, m_dim,
                                        a, b, c);
     }
 
     if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
-        return matrix_madd_block(m_dim_orig,
+        return matrix_madd_block(m_dim_orig, p_cols,
                                  n_rows, p_cols, m_dim,
                                  a, b, c);
     }
@@ -174,121 +172,206 @@ unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
 
 }
 
-unsafe fn matrix_madd_block(m_dim: usize, a_rows: usize, b_cols: usize, _f_blocks: usize,
+unsafe fn matrix_madd_block(m_dim: usize, p_cols: usize,
+                            a_rows: usize, b_cols: usize, sub_m: usize,
                                   a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
     let miniblock = 128;
     let row_stripes = a_rows - a_rows % miniblock;
     let col_pillars = b_cols - b_cols % miniblock;
-    let blocks = col_pillars;
+    let blocks = sub_m - sub_m % miniblock;
 
     for pillar in (0 .. col_pillars).step_by(miniblock) {
         for block in (0 .. blocks).step_by(miniblock) {
             for stripe in (0 .. row_stripes).step_by(miniblock) {
-                let c_idx = get_elt(stripe, pillar, m_dim);
+                let c_idx = get_elt(stripe, pillar, p_cols);
                 let c_chunk = c.offset(c_idx as isize);
                     
                 let a_idx = get_elt(stripe, block, m_dim);
-                let b_idx = get_elt(block, pillar, m_dim);
                 let a_chunk = a.offset(a_idx as isize);
+                
+                let b_idx = get_elt(block, pillar, p_cols);
                 let b_chunk = b.offset(b_idx as isize);
-                matrix_madd_inner_block(m_dim,
+                matrix_madd_inner_block(m_dim, p_cols,
                                         miniblock, miniblock, miniblock,
                                         a_chunk, b_chunk, c_chunk);
             }
+
+            let c_idx = get_elt(row_stripes, pillar, p_cols) as isize;
+            let c_chunk = c.offset(c_idx);
+
+            let a_idx = get_elt(row_stripes, block, m_dim) as isize;
+            let a_chunk = a.offset(a_idx);
+            
+            let b_idx = get_elt(block, pillar, p_cols) as isize;
+            let b_chunk = b.offset(b_idx);
+            matrix_madd_inner_block(m_dim, p_cols,
+                                    a_rows - row_stripes, miniblock, miniblock,
+                                    a_chunk, b_chunk, c_chunk);
         }
     }
 }
 
 #[inline(always)]
-unsafe fn matrix_madd_inner_block(m_dim: usize, a_rows: usize, b_cols: usize, c_blocks: usize,
+unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
+                                  a_rows: usize, b_cols: usize, sub_m: usize,
                                   a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
     const MINIBLOCK: usize = 4;
     let row_stripes = a_rows - a_rows % MINIBLOCK;
     let col_pillars = b_cols - b_cols % MINIBLOCK;
-    let sub_blocks = c_blocks - c_blocks % MINIBLOCK;
+    let sub_blocks = sub_m - sub_m % MINIBLOCK;
 
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
         for block in (0 .. sub_blocks).step_by(MINIBLOCK) {
             for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
-                let c_idx = get_elt(stripe, pillar, m_dim);
+                let c_idx = get_elt(stripe, pillar, p_cols);
                 let c_chunk = c.offset(c_idx as isize);
             
                 let a_idx = get_elt(stripe, block, m_dim);
-                let b_idx = get_elt(block, pillar, m_dim);
+                let b_idx = get_elt(block, pillar, p_cols);
                 let a_chunk = a.offset(a_idx as isize);
                 let b_chunk = b.offset(b_idx as isize);
                 minimatrix_fmadd64(m_dim, a_chunk, b_chunk, c_chunk);
             }
+        }
             
-            /* Say you have a 7x7 matrix. 
-             * |A11A12A13A14A15A16A17||B11B12B13B14B15B16B17| |C11C12C13C14C15C16C17| 
-             * |A21A22A23A24A25A26A27||B21B22B23B24B25B26B27| |C21C22C23C24C25C26C27| 
-             * |A31A32A33A34A35A36A37||B31B32B33B34B35B36B37| |C31C32C33C34C35C36C37|
-             * |A41A42A43A44A45A46A47||B41B42B43B44B45B46B47|+|C41C42C43C44C45C46C47|
-             * |A51A52A53A54A55A56A57||B51B52B53B54B55B56B57| |C51C52C53C54C55C56C57|
-             * |A61A62A63A64A65A66A67||B61B62B63B64B65B66B67| |C61C62C63C64C65C66C67|
-             * |A71A72A73A74A75A76A77||B71B72B73B74B75B76B77| |C71C72C73C74C75C76C77|
-             *
-             * Then at this point, C has been (partially) handled from
-             * C(1..4),(1..4).  C15 to C47 can be partially handled by
-             *
-             * C15 += A11*B15 + A12*B25 + A13*B35 + A14*B45 | + A15B55+A16B65+A17B75  (later)
-             * C25 += A21*B15 + A22*B25 + A23*B35 + A24*B45 | + A25B55+A26B65+A27B75  (later)
-             * C35 += A31*B15 + A32*B25 + A33*B35 + A34*B45 | + A35B55+A36B65+A37B75  (later)
-             * C45 += A41*B15 + A42*B25 + A43*B35 + A44*B45 | + A45B55+A46B65+A47B75  (later)
-             *
-             * However, we can't go past this stripe. We will have to
-             * handle row(B, 5+) later. Regardless, This presents
-             * another opportunity for vectorization. */
-            for column in col_pillars .. b_cols {
-                let b1 = *b.offset(get_elt(block, column, m_dim) as isize);
-                let b2 = *b.offset(get_elt(block + 1, column, m_dim) as isize);
-                let b3 = *b.offset(get_elt(block + 2, column, m_dim) as isize);
-                let b4 = *b.offset(get_elt(block + 3, column, m_dim) as isize);
-                let b_col_vec = _mm256_set_pd(b1, b2, b3, b4);
-                for row in 0 .. MINIBLOCK {
-                    let c_idx = get_elt(stripe + row, column, m_dim) as isize;
-                    let mut ci = c.offset(c_idx);
-                    let a_idx = get_elt(stripe + row, block, m_dim);
-                    let a_row = _mm256_loadu_pd(a.offset(a_idx as isize));
-                    let res = _mm256_mul_pd(a_row, b_col_vec);
-                    let mut res_arr: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
-                    _mm256_storeu_pd(&mut res_arr[0] as *mut f64, res);
-                    *ci += res_arr[0] + res_arr[1] + res_arr[2] + res_arr[3];
+        /* Say A is a 7x6 matrix and B is a 6x7 matrix, then C must be a 7x7 matrix
+         * |11 12 13 14 15 16||11 12 13 14 15 16 17| |11 12 13 14 15 16 17| 
+         * |21 22 23 24 25 26||21 22 23 24 25 26 27| |21 22 23 24 25 26 27| 
+         * |31 32 33 34 35 36||31 32 33 34 35 36 37| |31 32 33 34 35 36 37|
+         * |41 42 43 44 45 46||41 42 43 44 45 46 47|+|41 42 43 44 45 46 47|
+         * |51 52 53 54 55 56||51 52 53 54 55 56 57| |51 52 53 54 55 56 57|
+         * |61 62 63 64 65 66||61 62 63 64 65 66 67| |61 62 63 64 65 66 67|
+         * |71 72 73 74 75 76|                       |71 72 73 74 75 76 77|
+         *
+         * Then at this point, C has been (partially) handled from
+         * C(1..4),(1..4).  C15 to C47 can be partially handled by
+         *
+         * C15 += A11B15 + A12B25 + A13B35 + A14B45 | + A15B55 + A16B65  (later)
+         * C16 += A11B16 + A12B26 + A13B36 + A14B46 | + A15B56 + A16B66  (later)
+         * C17 += A11B17 + A12B27 + A13B37 + A14B47 | + A15B57 + A16B67  (later)
+         * 
+         * C25 += A21B15 + A22B25 + A23B35 + A24B45 | + A25B55 + A26B65  (later)
+         * C26 += A21B16 + A22B26 + A23B36 + A24B46 | + A25B56 + A26B66  (later)
+         * C27 += A21B17 + A22B27 + A23B37 + A24B47 | + A25B57 + A26B67  (later)
+         *
+         * C35 += A31B15 + A32B25 + A33B35 + A34B45 | + A35B55 + A36B65  (later)
+         * C36 += A31B16 + A32B26 + A33B36 + A34B45 | + A35B56 + A36B66  (later)
+         * C37 += A31B17 + A32B27 + A33B37 + A34B45 | + A35B57 + A36B67  (later)
+         *
+         * C45 += A41B15 + A42B25 + A43B35 + A44B45 | + A45B55 + A46B65  (later)
+         * C46 += A31B16 + A32B26 + A33B36 + A34B45 | + A35B56 + A36B66  (later)
+         * C47 += A31B17 + A32B27 + A33B37 + A34B45 | + A35B57 + A36B67  (later)
+         */
+
+        for k in sub_blocks .. sub_m {
+            for row in stripe .. stripe + MINIBLOCK {
+                let c_idx = get_elt(row, k, p_cols) as isize;
+                let c_elt = c.offset(c_idx);
+                let mut store: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
+                let mut c_tmp = _mm256_setzero_pd();
+
+                for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
+                    let a_idx = get_elt(row, pillar, m_dim) as isize;
+                    let a_row_vec = _mm256_loadu_pd(a.offset(a_idx));
+                    
+                    let b1 = *b.offset(get_elt(stripe + pillar, k, p_cols) as isize);
+                    let b2 = *b.offset(get_elt(stripe + pillar + 1, k, p_cols) as isize);
+                    let b3 = *b.offset(get_elt(stripe + pillar + 2, k, p_cols) as isize);
+                    let b4 = *b.offset(get_elt(stripe + pillar + 3, k, p_cols) as isize);
+                    let b_col_vec = _mm256_set_pd(b1, b2, b3, b4);
+                    c_tmp = _mm256_fmadd_pd(a_row_vec, b_col_vec, c_tmp);
                 }
+
+                _mm256_storeu_pd(&mut store[0] as *mut f64, c_tmp);
+                *c_elt += store[0] + store[1] + store[2] + store[3];
+            }
+        }        
+    }
+
+    /* Returning to the (7x6)(6x7) + (7x7) case...
+     * At this point, C has been partially handled from
+     * C(1..4),(1..7), so we need to finish up everything:
+     * C11+=A15B51, C12+=A15B52, C13+=A15B53, C14+=A15B54, C15+=A15B55, C16+=A15B56
+     * C11+=A16B61, C12+=A16B62, C13+=A16B63, C14+=A16B64, C15+=A16B65, C16+=A16B66
+     * C11+=A17B71, C12+=A17B72, C13+=A17B73, C14+=A17B74, C15+=A17B75, C16+=A17B76
+     *
+     * C21+=A25B51, C22+=A25B52, C23+=A25B53, C24+=A25B54, C25+=A25B55, C16+=A15B56
+     * ...
+     * C31+=A35B51, C32+=A35B52, C33+=A35B53, C34+=A35B54, C35+=A35B55, C36+=A15B56
+     * ...
+     * C41+=A45B51, C42+=A45B52, C43+=A45B53, C44+=A45B54, C45+=A45B55, C46+=A15B56
+     */
+
+    for row in 0 .. row_stripes {
+        for rem_row in row_stripes .. a_rows {
+            let a_idx = get_elt(row, rem_row, m_dim) as isize;
+            let a_elt = a.offset(a_idx);
+            let a_elt_mult = _mm256_broadcast_sd(&*a_elt);
+            
+            for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
+                let b_idx = get_elt(rem_row, pillar, p_cols) as isize;
+                let b_row_vec = _mm256_loadu_pd(b.offset(b_idx));
+
+                let c_idx = get_elt(row, pillar, p_cols) as isize;
+                let mut c_row_vec = _mm256_loadu_pd(c.offset(c_idx));
+
+                c_row_vec = _mm256_fmadd_pd(a_elt_mult, b_row_vec, c_row_vec);
+                _mm256_storeu_pd(c.offset(c_idx), c_row_vec);
+            }
+            
+            for col in col_pillars .. b_cols {
+                let b_idx = get_elt(rem_row, col, p_cols) as isize;
+                let b_elt = b.offset(b_idx);
+                let c_idx = get_elt(row, col, p_cols) as isize;
+                let c_elt = c.offset(c_idx);
+                madd(a_elt, b_elt, c_elt);
             }
         }
     }
 
-    /* Returning to the 7x7 matrix
-     *
-     * Then at this point, C has been partially handled from
-     * C(1..4),(1..7), so we need to finish up everything:
-     * C11+=A15B51, C12+=A15B52, C13+=A15B53, C14+=A15B54, C15+=A15B55, C16+=A15B56, C17+=A15B57
-     * C11+=A16B61, C12+=A16B62, C13+=A16B63, C14+=A16B64, C15+=A16B65, C16+=A16B66, C17+=A16B67
-     * C11+=A17B71, C12+=A17B72, C13+=A17B73, C14+=A17B74, C15+=A17B75, C16+=A17B76, C17+=A17B77
-     *
-     * C21+=A25B51, C22+=A25B52, C23+=A25B53, C24+=A25B54, C25+=A25B55, C16+=A15B56, C27+=A15B57
-     * ...
-     * C31+=A35B51, C32+=A35B52, C33+=A35B53, C34+=A35B54, C35+=A35B55, C36+=A15B56, C37+=A15B57
-     * ...
-     * C41+=A45B51, C42+=A45B52, C43+=A45B53, C44+=A45B54, C45+=A45B55, C46+=A15B56, C47+=A15B57
-     * This can be restated as Row(C,i) += A(i,5)*Row(B,5) from i = 1 to i = 4 
-     */
-
-    for i in 0 .. row_stripes {
-        /* Row(C, i) += */
-    }
-
-    /* And of course the last row of C is the fifth row of A dotted by
+    /* And of course the last 3 rows of C are the corresponding row of A dotted by
      * each column of B:
-     * C51+=AR5.BC1,C52+=AR5.BC2,C53+=AR5.BC3,C54+=AR5.BC4,C55+=AR5.BC5,C56+=AR5.BC6,C57+=AR5.BC7
-     * C61+=AR6.BC1,C62+=AR6.BC2,C63+=AR6.BC3,C64+=AR6.BC4,C65+=AR6.BC6,C66+=AR6.BC6,C67+=AR6.BC7
-     * C71+=AR7.BC1,C72+=AR7.BC2,C73+=AR7.BC3,C74+=AR7.BC4,C75+=AR7.BC7,C76+=AR7.BC6,C77+=AR7.BC7
-     */
+     * C51+=AR5.BC1, C52+=AR5.BC2, C53+=AR5.BC3, C54+=AR5.BC4, C55+=AR5.BC5, C56+=AR5.BC6
+     * C61+=AR6.BC1, C62+=AR6.BC2, C63+=AR6.BC3, C64+=AR6.BC4, C65+=AR6.BC6, C66+=AR6.BC6
+     * C71+=AR7.BC1, C72+=AR7.BC2, C73+=AR7.BC3, C74+=AR7.BC4, C75+=AR7.BC7, C76+=AR7.BC6
+     *
+     * In a bit more detail...
+     * C51+=A51B11, C52+=A51B12, C53+=A51B13, C54+=A51B14, C55+=A51B15, C56+=A51B16
+     * C51+=A52B21, C52+=A52B22, C53+=A52B23, C54+=A52B24, C55+=A52B25, C56+=A52B26
+     * C51+=A53B31, C52+=A53B32, C53+=A53B33, C54+=A53B34, C55+=A53B35, C56+=A53B36 
+     * C51+=A54B41, C52+=A54B41, C53+=A54B41, C54+=A54B41, C55+=A54B41, C56+=A54B41
+     * C51+=A55B51, C52+=A55B52, C53+=A55B53, C54+=A55B54, C55+=A55B55, C56+=A55B56
+     * C51+=A56B61, C52+=A56B62, C53+=A56B63, C54+=A56B64, C55+=A56B65, C56+=A56B63
 
+     */
+    for rem_row in row_stripes .. a_rows {
+        for k in 0 .. sub_m {
+            let a_idx = get_elt(rem_row, k, m_dim) as isize;
+            let a_elt = a.offset(a_idx);
+            let a_elt_mult = _mm256_broadcast_sd(&*a_elt);
+            
+            for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
+                let b_idx = get_elt(k, pillar, p_cols) as isize;
+                let b_row_vec = _mm256_loadu_pd(b.offset(b_idx));
+
+                let c_idx = get_elt(rem_row, pillar, p_cols) as isize;
+                let mut c_row_vec = _mm256_loadu_pd(c.offset(c_idx));
+                c_row_vec = _mm256_fmadd_pd(a_elt_mult, b_row_vec, c_row_vec);
+                _mm256_storeu_pd(c.offset(c_idx), c_row_vec);
+            }
+
+            for col in col_pillars .. b_cols {
+                let b_idx = get_elt(k, col, p_cols) as isize;
+                let b_elt = b.offset(b_idx);
+
+                let c_idx = get_elt(rem_row, col, p_cols) as isize;
+                let c_elt = c.offset(c_idx);
+                madd(a_elt, b_elt, c_elt);
+            }
+        }
+    }
 }
 
 #[target_feature(enable = "avx2")]

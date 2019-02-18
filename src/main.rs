@@ -1,5 +1,4 @@
-#![feature(align_offset)]
-
+//#![feature(align_offset)]
 extern crate ndarray;
 
 pub mod lib;

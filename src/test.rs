@@ -3,20 +3,35 @@ use crate::lib::matrix_madd;
 use crate::lib::{matrix_madd_n_sq, matrix_madd_nmp};
 
 #[test]
-fn matrix_madd_1to15_sq() {
-    for n in 1 .. 16 {
-        if n % 4 != 0 {
-            matrix_madd_n_sq(n);
-        }
+fn matrix_madd_1to4_sq() {
+    for n in 1 .. 4 {
+        matrix_madd_n_sq(n);
     }
 }
 
-/*
 #[test]
-fn matrix_4sq_test() {
-    matrix_madd_n_sq(4);
+fn matrix_madd_5_sq() {
+    matrix_madd_n_sq(5);
 }
 
+#[test]
+fn matrix_madd_6_sq() {
+    matrix_madd_n_sq(6);
+}
+
+#[test]
+fn matrix_madd_7x6_6xn() {
+    for n in 1 .. 8 {
+        matrix_madd_nmp(7,6,n)
+    }
+}
+
+#[test]
+fn matrix_madd_7_sq() {
+    matrix_madd_n_sq(7);
+}
+
+/*
 #[test]
 fn matrix_madd_8sq() {
     matrix_madd_n_sq(8);

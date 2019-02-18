@@ -99,17 +99,17 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
 }
 
 fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
+    let mut i_msgs = String::new();
+    let mut equal = true;
     for i in 0 .. rows * cols {
         if !floateq(c[i], correct[i]) {
-            if rows * cols <= 16 {
-                for i in 0 .. rows * cols {
-                    println!("{} != {}",  c[i], correct[i]);
-                }
-            }
-            panic!("{}, {} != {}, rows = {}, cols = {}, length = {}",
-                   i, c[i], correct[i],
-                   rows, cols, c.len());
+            equal = false;
+            i_msgs = format!("{}\n{}, {} != {}, rows = {}, cols = {}, length = {}",
+                             i_msgs, i + 1, c[i], correct[i], rows, cols, c.len());
         }
+    }
+    if !equal {
+        panic!("{}", i_msgs);
     }
 }
 
