@@ -1,7 +1,9 @@
-use super::lib::random_array;
+//use super::lib::random_array;
 use crate::lib::matrix_madd;
 use crate::lib::{matrix_madd_n_sq, matrix_madd_nmp};
+use crate::lib::test_equality;
 
+/*
 #[test]
 fn matrix_madd_1to4_sq() {
     for n in 1 .. 4 {
@@ -20,10 +22,8 @@ fn matrix_madd_6_sq() {
 }
 
 #[test]
-fn matrix_madd_7x6_6xn() {
-    for n in 1 .. 8 {
-        matrix_madd_nmp(7,6,n)
-    }
+fn matrix_madd_7x6_6x7() {
+    matrix_madd_nmp(7,6,7)
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn matrix_madd_7_sq() {
     matrix_madd_n_sq(7);
 }
 
-/*
+
 #[test]
 fn matrix_madd_8sq() {
     matrix_madd_n_sq(8);
@@ -46,14 +46,14 @@ fn matrix_madd_16sq() {
 fn matrix_madd_32sq() {
     matrix_madd_n_sq(32);
 }
- */
+*/
 /*
 #[test]
 fn matrix_madd_64sq() {
     matrix_madd_n_sq(64);
 }
-*/
-/*
+
+
 #[test]
 fn matrix_madd_128sq() {
     matrix_madd_n_sq(128);
@@ -64,17 +64,18 @@ fn matrix_madd_128sq() {
 fn matrix_256sq_test() {
     matrix_madd_n_sq(256);
 }
-
+*/
 #[test]
 fn matrix_480_sq_test() {
     matrix_madd_n_sq(480);
 }
 
+
 #[test]
 fn matrix_508_sq_test() {
     matrix_madd_n_sq(508);
 }
-
+/*
 #[test]
 fn matrix_512_sq_test() {
     matrix_madd_n_sq(512);

@@ -3,11 +3,11 @@ extern crate ndarray;
 
 mod utilities;
 
-use std::cmp::max;
+use std::cmp::{min, max};
 use core::arch::x86_64::{__m256d, _mm256_set_pd, _mm256_broadcast_sd};
 use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
-pub use utilities::{get_elt, random_array, floateq};
+pub use utilities::{get_elt, random_array, float_eq, test_equality};
 pub use utilities::{matrix_madd_n_sq, matrix_madd_nxm, matrix_madd_nmp};
 
 pub trait FMADD {
@@ -88,7 +88,6 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
                                            n_rows, p_cols, m_dim,
                                            a_ptr, b_ptr, c_ptr);
         }
-        // (* 32 8) 256
         if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
             return matrix_madd_block(m_dim, p_cols,
                                      n_rows, p_cols, m_dim,
@@ -176,11 +175,11 @@ unsafe fn matrix_madd_block(m_dim: usize, p_cols: usize,
                             a_rows: usize, b_cols: usize, sub_m: usize,
                                   a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
-    let miniblock = 128;
+    let miniblock = min(128, m_dim);
     let row_stripes = a_rows - a_rows % miniblock;
     let col_pillars = b_cols - b_cols % miniblock;
     let blocks = sub_m - sub_m % miniblock;
-
+    println!("{} {} {} {} {} {}", a_rows, b_cols, sub_m, row_stripes, col_pillars, blocks);
     for pillar in (0 .. col_pillars).step_by(miniblock) {
         for block in (0 .. blocks).step_by(miniblock) {
             for stripe in (0 .. row_stripes).step_by(miniblock) {
@@ -196,18 +195,6 @@ unsafe fn matrix_madd_block(m_dim: usize, p_cols: usize,
                                         miniblock, miniblock, miniblock,
                                         a_chunk, b_chunk, c_chunk);
             }
-
-            let c_idx = get_elt(row_stripes, pillar, p_cols) as isize;
-            let c_chunk = c.offset(c_idx);
-
-            let a_idx = get_elt(row_stripes, block, m_dim) as isize;
-            let a_chunk = a.offset(a_idx);
-            
-            let b_idx = get_elt(block, pillar, p_cols) as isize;
-            let b_chunk = b.offset(b_idx);
-            matrix_madd_inner_block(m_dim, p_cols,
-                                    a_rows - row_stripes, miniblock, miniblock,
-                                    a_chunk, b_chunk, c_chunk);
         }
     }
 }
@@ -217,10 +204,12 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
                                   a_rows: usize, b_cols: usize, sub_m: usize,
                                   a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
+    println!("{} {} {}", a_rows, b_cols, sub_m);
     const MINIBLOCK: usize = 4;
     let row_stripes = a_rows - a_rows % MINIBLOCK;
     let col_pillars = b_cols - b_cols % MINIBLOCK;
     let sub_blocks = sub_m - sub_m % MINIBLOCK;
+
 
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
         for block in (0 .. sub_blocks).step_by(MINIBLOCK) {
@@ -265,27 +254,19 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
          * C47 += A31B17 + A32B27 + A33B37 + A34B45 | + A35B57 + A36B67  (later)
          */
 
-        for k in sub_blocks .. sub_m {
-            for row in stripe .. stripe + MINIBLOCK {
+        for row in stripe .. stripe + MINIBLOCK {
+            for k in sub_blocks .. sub_m {
                 let c_idx = get_elt(row, k, p_cols) as isize;
                 let c_elt = c.offset(c_idx);
-                let mut store: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
-                let mut c_tmp = _mm256_setzero_pd();
 
-                for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
-                    let a_idx = get_elt(row, pillar, m_dim) as isize;
-                    let a_row_vec = _mm256_loadu_pd(a.offset(a_idx));
-                    
-                    let b1 = *b.offset(get_elt(stripe + pillar, k, p_cols) as isize);
-                    let b2 = *b.offset(get_elt(stripe + pillar + 1, k, p_cols) as isize);
-                    let b3 = *b.offset(get_elt(stripe + pillar + 2, k, p_cols) as isize);
-                    let b4 = *b.offset(get_elt(stripe + pillar + 3, k, p_cols) as isize);
-                    let b_col_vec = _mm256_set_pd(b1, b2, b3, b4);
-                    c_tmp = _mm256_fmadd_pd(a_row_vec, b_col_vec, c_tmp);
+                for col in 0 .. col_pillars {
+                    let a_idx = get_elt(row, col, m_dim) as isize;
+                    let b_idx = get_elt(col, k, p_cols) as isize;
+                    let a_elt = a.offset(a_idx);
+                    let b_elt = b.offset(b_idx);
+
+                    madd(a_elt, b_elt, c_elt);                    
                 }
-
-                _mm256_storeu_pd(&mut store[0] as *mut f64, c_tmp);
-                *c_elt += store[0] + store[1] + store[2] + store[3];
             }
         }        
     }
@@ -305,11 +286,25 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
      */
 
     for row in 0 .. row_stripes {
+        for col in 0 .. b_cols {
+            let c_idx = get_elt(row, col, p_cols) as isize;
+            let c_elt = c.offset(c_idx);
+            
+            for k in sub_blocks .. m_dim {
+                let a_idx = get_elt(row, k, m_dim) as isize;
+                let b_idx = get_elt(k, col, p_cols) as isize;
+
+                let a_elt = a.offset(a_idx);
+                let b_elt = b.offset(b_idx);
+                madd(a_elt, b_elt, c_elt);
+            }
+        }
+        /*
         for rem_row in row_stripes .. a_rows {
             let a_idx = get_elt(row, rem_row, m_dim) as isize;
             let a_elt = a.offset(a_idx);
             let a_elt_mult = _mm256_broadcast_sd(&*a_elt);
-            
+
             for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
                 let b_idx = get_elt(rem_row, pillar, p_cols) as isize;
                 let b_row_vec = _mm256_loadu_pd(b.offset(b_idx));
@@ -329,7 +324,9 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
                 madd(a_elt, b_elt, c_elt);
             }
         }
+         */
     }
+
 
     /* And of course the last 3 rows of C are the corresponding row of A dotted by
      * each column of B:
@@ -346,12 +343,13 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
      * C51+=A56B61, C52+=A56B62, C53+=A56B63, C54+=A56B64, C55+=A56B65, C56+=A56B63
 
      */
+
     for rem_row in row_stripes .. a_rows {
         for k in 0 .. sub_m {
             let a_idx = get_elt(rem_row, k, m_dim) as isize;
             let a_elt = a.offset(a_idx);
             let a_elt_mult = _mm256_broadcast_sd(&*a_elt);
-            
+
             for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
                 let b_idx = get_elt(k, pillar, p_cols) as isize;
                 let b_row_vec = _mm256_loadu_pd(b.offset(b_idx));
@@ -372,10 +370,13 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
             }
         }
     }
+
 }
 
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
+/* This function is simply for the case of the root arrays A and B
+ * being a single row and a single column. */
 unsafe fn folding_dot_prod(row: &[f64], col: &[f64], c_elt: &mut f64) {
     let final_max = row.len();
     let first_max = final_max - final_max % 4;

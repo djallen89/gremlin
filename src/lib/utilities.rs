@@ -10,7 +10,7 @@ pub fn get_elt(row: usize, col: usize, n_cols: usize) -> usize {
     row * n_cols + col
 }
 
-pub fn floateq(a: f64, b: f64) -> bool {
+pub fn float_eq(a: f64, b: f64) -> bool {
     use std::f64;
     
     let abs_a = a.abs();
@@ -98,18 +98,31 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     test_equality(n, p, &c, &slice);
 }
 
-fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
+pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut i_msgs = String::new();
     let mut equal = true;
-    for i in 0 .. rows * cols {
-        if !floateq(c[i], correct[i]) {
-            equal = false;
-            i_msgs = format!("{}\n{}, {} != {}, rows = {}, cols = {}, length = {}",
-                             i_msgs, i + 1, c[i], correct[i], rows, cols, c.len());
+    let mut inequalities = 0;
+    for i in 0 .. rows {
+        for j in 0 .. cols {
+            if !float_eq(c[i], correct[i]) {
+                inequalities += 1;
+                equal = false;
+                if rows * cols < 25 {
+                    i_msgs = format!("{} {},{}", i_msgs, i + 1, j + 1);
+                }
+            }
+        }
+        if i_msgs.len() > 0 {
+            i_msgs = format!("{}\n", i_msgs);
         }
     }
+
     if !equal {
-        panic!("{}", i_msgs);
+        if rows * cols < 25 {
+            panic!("{}", i_msgs);
+        } else {
+            panic!("{} inequalities", inequalities);
+        }
     }
 }
 
