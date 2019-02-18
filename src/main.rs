@@ -8,7 +8,7 @@ mod test;
 mod benchmark;
 
 use std::env;
-use lib::{matrix_madd, random_array, floateq};
+use lib::{matrix_madd, random_array, float_eq};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 
@@ -41,7 +41,7 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
 
 fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     for i in 0 .. rows * cols {
-        if !floateq(c[i], correct[i]) {
+        if !float_eq(c[i], correct[i]) {
             if rows * cols <= 16 {
                 for i in 0 .. rows * cols {
                     println!("{} != {}",  c[i], correct[i]);
@@ -49,15 +49,15 @@ fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
             }
             panic!("{}, {} != {}", i, c[i], correct[i]);
         }
-        assert!(floateq(c[i], correct[i]));
+        assert!(float_eq(c[i], correct[i]));
     }
     println!("Matrices are equal.");
 }
 
 fn main() {
-    let mut n = 4;
-    let mut m = 4;
-    let mut p = 4;
+    let mut n = 128;
+    let mut m = 128;
+    let mut p = 128;
     let args: Vec<String> = env::args().collect();
     match args.len() {
         1 => {},
@@ -87,6 +87,8 @@ fn main() {
             return;
         }
     }
-    matrix_madd_nmp(n, m, p);
+    for i in 0 .. 10 {
+        matrix_madd_nmp(n, m, p);
+    }
 }
 
