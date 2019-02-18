@@ -265,8 +265,8 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
          * C47 += A31B17 + A32B27 + A33B37 + A34B45 | + A35B57 + A36B67  (later)
          */
 
-        for k in sub_blocks .. sub_m {
-            for row in stripe .. stripe + MINIBLOCK {
+        for row in stripe .. stripe + MINIBLOCK {
+            for k in sub_blocks .. sub_m {
                 let c_idx = get_elt(row, k, p_cols) as isize;
                 let c_elt = c.offset(c_idx);
                 let mut store: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
@@ -320,7 +320,7 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
                 c_row_vec = _mm256_fmadd_pd(a_elt_mult, b_row_vec, c_row_vec);
                 _mm256_storeu_pd(c.offset(c_idx), c_row_vec);
             }
-            
+
             for col in col_pillars .. b_cols {
                 let b_idx = get_elt(rem_row, col, p_cols) as isize;
                 let b_elt = b.offset(b_idx);
@@ -328,6 +328,7 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
                 let c_elt = c.offset(c_idx);
                 madd(a_elt, b_elt, c_elt);
             }
+
         }
     }
 

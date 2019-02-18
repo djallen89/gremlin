@@ -31,17 +31,22 @@ fn matrix_madd_7_sq() {
     matrix_madd_n_sq(7);
 }
 
-/*
+
 #[test]
 fn matrix_madd_8sq() {
     matrix_madd_n_sq(8);
 }
 
 #[test]
+fn matrix_madd_13_sq() {
+    matrix_madd_n_sq(13);
+}
+
+#[test]
 fn matrix_madd_16sq() {
     matrix_madd_n_sq(16);
 }
-
+/*
 #[test]
 fn matrix_madd_32sq() {
     matrix_madd_n_sq(32);
