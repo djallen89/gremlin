@@ -5,6 +5,22 @@ use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 use super::matrix_madd;
 
+pub trait FMADD {
+    fn fmadd(&mut self, a: Self, b: Self);
+}
+
+impl FMADD for f32 {
+    fn fmadd(&mut self, a: f32, b: f32) {
+        *self = a.mul_add(b, *self);
+    }
+}
+
+impl FMADD for f64 {
+    fn fmadd(&mut self, a: f64, b: f64) {
+        *self = a.mul_add(b, *self);
+    }
+}
+
 #[inline(always)]
 pub fn get_elt(row: usize, col: usize, n_cols: usize) -> usize {
     row * n_cols + col

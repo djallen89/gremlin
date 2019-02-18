@@ -9,22 +9,7 @@ use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
 pub use utilities::{get_elt, random_array, float_eq, test_equality};
 pub use utilities::{matrix_madd_n_sq, matrix_madd_nxm, matrix_madd_nmp};
-
-pub trait FMADD {
-    fn fmadd(&mut self, a: Self, b: Self);
-}
-
-impl FMADD for f32 {
-    fn fmadd(&mut self, a: f32, b: f32) {
-        *self = a.mul_add(b, *self);
-    }
-}
-
-impl FMADD for f64 {
-    fn fmadd(&mut self, a: f64, b: f64) {
-        *self = a.mul_add(b, *self);
-    }
-}
+pub use utilities::FMADD;
 
 #[inline(always)]
 unsafe fn madd(a: *const f64, b: *const f64, c: *mut f64) {
@@ -70,7 +55,7 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
 
     unsafe {
         if n_rows == 1 && p_cols == 1 && m_dim >= 4 {
-            return folding_dot_prod(a, b, &mut c[0])
+            return single_dot_prod_add(a, b, &mut c[0])
         } else  if p_cols < 4 || n_rows < 4 {
             return small_matrix_mul_add(n_rows, m_dim, p_cols, a, b, c)
         }
@@ -80,7 +65,7 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
         let c_ptr = &mut c[0] as *mut f64;
 
         if n_rows <= 4 && p_cols <= 4 && m_dim <= 4 {
-            return minimatrix_fmadd64(m_dim, a_ptr, b_ptr, c_ptr);
+            return minimatrix_fmadd_f64(m_dim, a_ptr, b_ptr, c_ptr);
         }
 
         if n_rows <= 32 && p_cols <= 32 && m_dim <= 32 {
@@ -96,8 +81,36 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
         
         recursive_matrix_mul(p_cols, m_dim,
                              n_rows, p_cols, m_dim,
-                             a_ptr, b_ptr, c_ptr);
+                             a, b, c)
     }
+}
+
+#[target_feature(enable = "avx2")]
+#[cfg(any(target_arch = "x86_64"))]
+/* This function is simply for the case of the root arrays A and B
+ * being a single row and a single column. */
+unsafe fn single_dot_prod_add(row: &[f64], col: &[f64], c_elt: &mut f64) {
+    let final_max = row.len();
+    let first_max = final_max - final_max % 4;
+    let mut c_tmp = *c_elt;
+
+    let mut store: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
+    let mut a: __m256d;
+    let mut b: __m256d;
+    let mut c: __m256d = _mm256_setzero_pd();
+    
+    for i in (0 .. first_max).step_by(4) {
+        a = _mm256_loadu_pd(&row[i] as *const f64);
+        b = _mm256_loadu_pd(&col[i] as *const f64);
+        c = _mm256_fmadd_pd(a, b, c);
+    }
+
+    _mm256_storeu_pd(&mut store[0] as *mut f64, c);
+    c_tmp += store[0] + store[1] + store[2] + store[3];
+    for i in first_max .. final_max {
+        c_tmp.fmadd(row[i], col[i]);
+    }
+    *c_elt = c_tmp;
 }
 
 fn small_matrix_mul_add(n_rows: usize, m_dim: usize, p_cols: usize,
@@ -112,54 +125,59 @@ fn small_matrix_mul_add(n_rows: usize, m_dim: usize, p_cols: usize,
     }
 }
 
-unsafe fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
-                               n_rows: usize, p_cols: usize, m_dim: usize,
-                               a: *const f64, b: *const f64, c: *mut f64) {
+fn recursive_matrix_mul(p_cols_orig: usize, m_dim_orig: usize,
+                        n_rows: usize, p_cols: usize, m_dim: usize,
+                        a: &[f64], b: &[f64], c: &mut [f64]) {
+    let a_ptr = &a[0] as *const f64;
+    let b_ptr = &b[0] as *const f64;
+    let c_ptr = &mut c[0] as *mut f64;
 
-    if n_rows == 4 && p_cols == 4 && m_dim == 4 {
-        return minimatrix_fmadd64(m_dim_orig, a, b, c);
+    unsafe {
+        if n_rows == 4 && p_cols == 4 && m_dim == 4 {
+            return minimatrix_fmadd_f64(m_dim_orig, a_ptr, b_ptr, c_ptr);
+        }
+
+        if (n_rows <= 32 && p_cols <= 32 && m_dim <= 32) || m_dim_orig % 32 != 0 {
+            return matrix_madd_inner_block(m_dim_orig, p_cols_orig,
+                                           n_rows, p_cols, m_dim,
+                                           a_ptr, b_ptr, c_ptr);
+        }
+
+        if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
+            return matrix_madd_block(m_dim_orig, p_cols,
+                                     n_rows, p_cols, m_dim,
+                                     a_ptr, b_ptr, c_ptr);
+        }
     }
-
-    if (n_rows <= 32 && p_cols <= 32 && m_dim <= 32) || m_dim_orig % 32 != 0 {
-        return matrix_madd_inner_block(m_dim_orig, p_cols_orig,
-                                       n_rows, p_cols, m_dim,
-                                       a, b, c);
-    }
-
-    if n_rows <= 256 && p_cols <= 256 && m_dim <= 256 {
-        return matrix_madd_block(m_dim_orig, p_cols,
-                                 n_rows, p_cols, m_dim,
-                                 a, b, c);
-    }
-
+    
     let maxn = max(max(n_rows, p_cols), m_dim);
     if maxn == n_rows {
         let n_rows_new = n_rows / 2;
         let aidx2 = n_rows_new * m_dim_orig;
-        let a_2 = a.offset(aidx2 as isize);
+        let a_2 = &a[aidx2 ..];
         let cidx2 = n_rows_new * p_cols_orig;
-        let c_2 = c.offset(cidx2 as isize);
+        let (c_1, c_2) = c.split_at_mut(cidx2);
         recursive_matrix_mul(p_cols_orig, m_dim_orig,
                              n_rows_new, p_cols, m_dim,
-                             a, b, c);
+                             a, b, c_1);
         recursive_matrix_mul(p_cols_orig, m_dim_orig,
                              n_rows_new, p_cols, m_dim,
                              a_2, b, c_2);
     } else if maxn == p_cols {
         let p_cols_new = p_cols / 2;
-        let b_2 = b.offset(p_cols_new as isize);
-        let c_2 = c.offset(p_cols_new as isize);
+        let b_2 = &b[p_cols_new ..];
+        let (c_1, c_2) = c.split_at_mut(p_cols_new);
         recursive_matrix_mul(p_cols_orig, m_dim_orig,
                              n_rows, p_cols_new, m_dim,
-                             a, b, c);
+                             a, b, c_1);
         recursive_matrix_mul(p_cols_orig, m_dim_orig,
                              n_rows, p_cols_new, m_dim,
                              a, b_2, c_2);
     } else {
         let m_dim_new = m_dim / 2;
-        let a_2 = a.offset(m_dim_new as isize);
+        let a_2 = &a[m_dim_new ..];
         let bidx2 = m_dim_new * p_cols_orig;
-        let b_2 = b.offset(bidx2 as isize);
+        let b_2 = &b[bidx2 ..];
         
         recursive_matrix_mul(p_cols_orig, m_dim_orig,
                              n_rows, p_cols, m_dim_new,
@@ -179,7 +197,6 @@ unsafe fn matrix_madd_block(m_dim: usize, p_cols: usize,
     let row_stripes = a_rows - a_rows % miniblock;
     let col_pillars = b_cols - b_cols % miniblock;
     let blocks = sub_m - sub_m % miniblock;
-    println!("{} {} {} {} {} {}", a_rows, b_cols, sub_m, row_stripes, col_pillars, blocks);
     for pillar in (0 .. col_pillars).step_by(miniblock) {
         for block in (0 .. blocks).step_by(miniblock) {
             for stripe in (0 .. row_stripes).step_by(miniblock) {
@@ -204,7 +221,6 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
                                   a_rows: usize, b_cols: usize, sub_m: usize,
                                   a: *const f64, b: *const f64, c: *mut f64) {
     /* 4col x 4row block of C += (b_cols x 4row of A)(4col * a_rows of B) */
-    println!("{} {} {}", a_rows, b_cols, sub_m);
     const MINIBLOCK: usize = 4;
     let row_stripes = a_rows - a_rows % MINIBLOCK;
     let col_pillars = b_cols - b_cols % MINIBLOCK;
@@ -221,7 +237,7 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
                 let b_idx = get_elt(block, pillar, p_cols);
                 let a_chunk = a.offset(a_idx as isize);
                 let b_chunk = b.offset(b_idx as isize);
-                minimatrix_fmadd64(m_dim, a_chunk, b_chunk, c_chunk);
+                minimatrix_fmadd_f64(m_dim, a_chunk, b_chunk, c_chunk);
             }
         }
             
@@ -375,34 +391,6 @@ unsafe fn matrix_madd_inner_block(m_dim: usize, p_cols: usize,
 
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
-/* This function is simply for the case of the root arrays A and B
- * being a single row and a single column. */
-unsafe fn folding_dot_prod(row: &[f64], col: &[f64], c_elt: &mut f64) {
-    let final_max = row.len();
-    let first_max = final_max - final_max % 4;
-    let mut c_tmp = *c_elt;
-
-    let mut store: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
-    let mut a: __m256d;
-    let mut b: __m256d;
-    let mut c: __m256d = _mm256_setzero_pd();
-    
-    for i in (0 .. first_max).step_by(4) {
-        a = _mm256_loadu_pd(&row[i] as *const f64);
-        b = _mm256_loadu_pd(&col[i] as *const f64);
-        c = _mm256_fmadd_pd(a, b, c);
-    }
-
-    _mm256_storeu_pd(&mut store[0] as *mut f64, c);
-    c_tmp += store[0] + store[1] + store[2] + store[3];
-    for i in first_max .. final_max {
-        c_tmp.fmadd(row[i], col[i]);
-    }
-    *c_elt = c_tmp;
-}
-
-#[target_feature(enable = "avx2")]
-#[cfg(any(target_arch = "x86_64"))]
 unsafe fn scalar_vec_fmadd_f64u(a_elt: &f64, b_row: *const f64, c_row: *mut f64) {
     let a: __m256d = _mm256_broadcast_sd(a_elt);
     let b: __m256d = _mm256_loadu_pd(b_row);
@@ -413,7 +401,7 @@ unsafe fn scalar_vec_fmadd_f64u(a_elt: &f64, b_row: *const f64, c_row: *mut f64)
 }
 
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
-pub fn minimatrix_fmadd64(n_cols: usize, a: *const f64, b: *const f64, c: *mut f64) {
+pub fn minimatrix_fmadd_f64(n_cols: usize, a: *const f64, b: *const f64, c: *mut f64) {
     /* For 4x4 matrices, the first row of AB + C can be represented as:
      *
      * A11B11 + A12B21 + A13B31 + A14B41 + C11,
