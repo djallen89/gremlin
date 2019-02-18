@@ -46,14 +46,32 @@ pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
 
     return arr;
 }
+
+pub fn matrix_madd_n_sq(n: usize) {
+    let a: Vec<f64> = random_array(n, n, -100.0, 100.0);
+    let b = random_array(n, n, -100.0, 100.0);
+    let mut c = random_array(n, n, -100.0, 100.0);
+    
+    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
+    matrix_madd(n, n, n, &a, &b, &mut c);
+
+    test_equality(n, n, &c, &slice);
+}
+
 pub fn matrix_madd_nxm(n: usize, m: usize) {
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
-    let b = random_array(n, m, -100.0, 100.0);
-    let mut c = random_array(n, m, -100.0, 100.0);
+    let b = random_array(m, n, -100.0, 100.0);
+    let mut c = random_array(n, n, -100.0, 100.0);
     
     let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((m, n)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
 
     general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
     let slice = carr.as_slice().unwrap();
@@ -88,9 +106,10 @@ fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
                     println!("{} != {}",  c[i], correct[i]);
                 }
             }
-            panic!("{}, {} != {}", i, c[i], correct[i]);
+            panic!("{}, {} != {}, rows = {}, cols = {}, length = {}",
+                   i, c[i], correct[i],
+                   rows, cols, c.len());
         }
-        assert!(floateq(c[i], correct[i]));
     }
 }
 
