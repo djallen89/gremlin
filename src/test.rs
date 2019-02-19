@@ -34,37 +34,8 @@ fn matrix_124_to_132_sq() {
     test_range(124, 132, &matrix_madd_n_sq)
 }
 
-
-#[test]
-fn matrix_madd_16sq() {
-    matrix_madd_n_sq(16);
-}
-/*
-#[test]
-fn matrix_madd_32sq() {
-    matrix_madd_n_sq(32);
-}
- */
-/*
-#[test]
-fn matrix_madd_64sq() {
-    matrix_madd_n_sq(64);
-}
-*/
-/*
-#[test]
-fn matrix_madd_128sq() {
-    matrix_madd_n_sq(128);
-}
-
-
-#[test]
-fn matrix_256sq_test() {
-    matrix_madd_n_sq(256);
-=======
 fn matrix_252_to_260_sq_test() {
     test_range(252, 260, &matrix_madd_n_sq)
->>>>>>> 58725d3d2cc2377de2d77db2bc9ddada4e2d5b50
 }
 
 #[test]
