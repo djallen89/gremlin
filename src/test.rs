@@ -29,20 +29,11 @@ fn matrix_60_to_68_sq() {
     test_range(60, 68, &matrix_madd_n_sq)
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 58725d3d2cc2377de2d77db2bc9ddada4e2d5b50
 #[test]
 fn matrix_124_to_132_sq() {
     test_range(124, 132, &matrix_madd_n_sq)
 }
 
-#[test]
-<<<<<<< HEAD
-fn matrix_madd_13_sq() {
-    matrix_madd_n_sq(13);
-}
 
 #[test]
 fn matrix_madd_16sq() {
