@@ -2,8 +2,6 @@
 extern crate ndarray;
 
 pub mod lib;
-#[cfg(test)]
-mod test;
 #[cfg(bench)]
 mod benchmark;
 
@@ -40,18 +38,27 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
 }
 
 fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
-    for i in 0 .. rows * cols {
-        if !float_eq(c[i], correct[i]) {
-            if rows * cols <= 16 {
-                for i in 0 .. rows * cols {
-                    println!("{} != {}",  c[i], correct[i]);
-                }
+    let mut equal = true;
+    let mut inequalities = String::new();
+    let mut count = 0;
+    for i in 0 .. rows {
+        for j in 0 .. cols {
+            if !float_eq(c[i], correct[i]) {
+                equal = false;
+                inequalities = format!("{}\n{},{}: {} !={}", inequalities,
+                                       i + 1, j + 1, c[i], correct[i]);
+                count += 1;
             }
-            panic!("{}, {} != {}", i, c[i], correct[i]);
         }
-        assert!(float_eq(c[i], correct[i]));
     }
-    println!("Matrices are equal.");
+    if equal {
+        println!("Matrices are equal.");
+    } else if !equal && rows * cols <= 36 {
+        println!("Matrices are inequal");
+        println!("{}", inequalities);
+    } else {
+        println!("Matrices are inequal. {} inequalities", count);
+    }
 }
 
 fn main() {
@@ -87,8 +94,7 @@ fn main() {
             return;
         }
     }
-    for i in 0 .. 10 {
-        matrix_madd_nmp(n, m, p);
-    }
+
+    matrix_madd_nmp(n, m, p);
 }
 
