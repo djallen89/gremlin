@@ -1,4 +1,4 @@
-use gremlin_lib::matrix_madd;
+use gremlin_lib::{matrix_madd, matrix_multithread};
 use gremlin_lib::{matrix_madd_n_sq, matrix_madd_nmp};
 use gremlin_lib::test_equality;
 
@@ -45,6 +45,11 @@ fn matrix_7x6_6xn() {
     })
 }
 
+#[test]
+fn matrix_512x1024x1024() {
+    matrix_madd_nmp(512, 1024, 1024)
+}
+
 /*
 #[test]
 fn matrix_nmp_small() {
@@ -58,14 +63,14 @@ fn matrix_nmp_small() {
     }
 }
 */
-
+/*
 #[test]
 fn matrix_8_1_p() {
     test_range(4, 10, &|p| {
         matrix_madd_nmp(8, 1, p)
     })
 }
-
+*/
 #[test]
 fn matrix_28_to_36_sq() {
     test_range(28, 36, &matrix_madd_n_sq);
@@ -123,12 +128,73 @@ fn matrix_768sq_test() {
 fn matrix_992_sq_test() {
     matrix_madd_n_sq(992, 992);
 }
-
+ */
+/*
 #[test]
 fn matrix_1024sq_test() {
-    matrix_madd_n_sq(1024, 1024);
+    matrix_madd_n_sq(1024);
+}
+ */
+#[test]
+fn matrix_2t128() {
+    matrix_multithread(2, 128);
 }
 
+#[test]
+fn matrix_4t128() {
+    matrix_multithread(4, 128);
+}
+
+#[test]
+fn matrix_8t128() {
+    matrix_multithread(8, 128);
+}
+
+#[test]
+fn matrix_2t256() {
+    matrix_multithread(2, 256);
+}
+
+#[test]
+fn matrix_4t256() {
+    matrix_multithread(4, 256);
+}
+
+#[test]
+fn matrix_8t256() {
+    matrix_multithread(8, 256);
+}
+
+#[test]
+fn matrix_2t512() {
+    matrix_multithread(2, 512);
+}
+
+#[test]
+fn matrix_4t512() {
+    matrix_multithread(4, 512);
+}
+
+#[test]
+fn matrix_8t512() {
+    matrix_multithread(8, 512);
+}
+
+#[test]
+fn matrix_2t1024() {
+    matrix_multithread(2, 1024);
+}
+
+#[test]
+fn matrix_4t1024() {
+    matrix_multithread(4, 1024);
+}
+
+#[test]
+fn matrix_8t1024() {
+    matrix_multithread(8, 1024);
+}
+/*
 #[test]
 fn matrix_1408_sq_test() {
     matrix_madd_n_sq(1408, 1408);

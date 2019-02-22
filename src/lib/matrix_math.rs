@@ -166,7 +166,7 @@ pub fn matrix_mul_add(m_dim_orig: usize,
                       p_cols_orig: usize, 
                       n_rows: usize, m_dim: usize, p_cols: usize, 
                       a: *const f64, b: *const f64, c: *mut f64) {
-    println!("matrix mul add {},{},{}", n_rows, m_dim, p_cols);
+
     if n_rows == 1 && p_cols <= 512 {
         unsafe {
             return vector_matrix_mul_add(p_cols_orig, m_dim, p_cols, &*a, b, c)

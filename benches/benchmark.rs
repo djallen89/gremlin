@@ -2,7 +2,7 @@
 extern crate criterion;
 use gremlin_lib;
 
-use gremlin_lib::{random_array, matrix_madd};
+use gremlin_lib::{random_array, matrix_madd, matrix_madd_multithread};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 
@@ -262,6 +262,49 @@ fn bench_1xmx2048(crit: &mut Criterion) {
     bench_nmp(n, m, p, crit);
 }
 
+fn bench_multithread(n: usize, crit: &mut Criterion) {
+    let my_name = format!("my dgemm {}sq", n);
+    let other_name = format!("multithreaded dgemm {}sq", n);
+    
+    let a: Vec<f64> = random_array(n, n, -100.0, 100.0);
+    let b = random_array(n, n, -100.0, 100.0);
+    let mut c = random_array(n, n, -100.0, 100.0);
+
+    let a2 = a.clone();
+    let b2 = b.clone();
+    let mut c2 = c.clone();
+
+    let threads = 8;
+
+    let bench_def;
+    bench_def = Benchmark::new(
+        my_name, move |bch| bch.iter(|| {
+            matrix_madd(n, n, n, &a, &b, &mut c)
+        }))
+        .with_function(other_name, move |bch| bch.iter(|| {
+            matrix_madd_multithread(threads, n, &a2, &b2, &mut c2)
+        }))
+        .sample_size(10);
+    
+    crit.bench("dgemm", bench_def);
+}
+
+fn bench_128_multi(crit: &mut Criterion) {
+    bench_multithread(128, crit);
+}
+
+fn bench_256_multi(crit: &mut Criterion) {
+    bench_multithread(256, crit);
+}
+
+fn bench_512_multi(crit: &mut Criterion) {
+    bench_multithread(512, crit);
+}
+
+fn bench_1024_multi(crit: &mut Criterion) {
+    bench_multithread(1024, crit);
+}
+
 criterion_group!(small_non4_matrices, bench_27_sq, bench_29_sq, bench_30_sq,
                  bench_31_sq, bench_33_sq, bench_34_sq, bench_35_sq);
 criterion_group!(small_4x_matrices, bench4x4, bench_12_sq, bench_16_sq,
@@ -272,5 +315,7 @@ criterion_group!(small_4x_matrices, bench4x4, bench_12_sq, bench_16_sq,
 criterion_group!(mid_non4_matrices, bench_126_sq, bench_127_sq,
                  bench_129_sq, bench_130_sq);
 criterion_group!(vectors, bench_2048x1, bench_1xmx2048);
-criterion_main!(small_non4_matrices);
+criterion_group!(multithread, bench_128_multi, bench_256_multi,
+                 bench_512_multi, bench_1024_multi);
+criterion_main!(multithread);
 

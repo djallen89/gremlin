@@ -4,6 +4,7 @@ use rand::prelude::*;
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 use super::matrix_madd;
+use super::matrix_madd_multithread;
 
 #[inline(always)]
 pub fn get_idx(row: usize, col: usize, n_cols: usize) -> usize {
@@ -45,6 +46,23 @@ pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
     }
 
     return arr;
+}
+
+pub fn matrix_multithread(threads: usize, n: usize) {
+    let a: Vec<f64> = random_array(n, n, -100.0, 100.0);
+    let b = random_array(n, n, -100.0, 100.0);
+    let mut c = random_array(n, n, -100.0, 100.0);
+    
+    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
+    matrix_madd_multithread(threads, n, &a, &b, &mut c);
+
+    test_equality(n, n, &c, &slice);
 }
 
 pub fn matrix_madd_n_sq(n: usize) {
