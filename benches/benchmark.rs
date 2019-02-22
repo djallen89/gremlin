@@ -274,7 +274,7 @@ fn bench_multithread(n: usize, crit: &mut Criterion) {
     let b2 = b.clone();
     let mut c2 = c.clone();
 
-    let threads = 8;
+    let threads = 4;
 
     let bench_def;
     bench_def = Benchmark::new(

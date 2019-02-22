@@ -122,7 +122,7 @@ pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut inequalities = 0;
     for i in 0 .. rows {
         for j in 0 .. cols {
-            if !float_eq(c[i], correct[i]) {
+            if !float_eq(c[i * cols + j], correct[i * cols + j]) {
                 inequalities += 1;
                 equal = false;
                 if rows * cols < 50 {

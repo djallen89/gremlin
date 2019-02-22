@@ -28,12 +28,10 @@ fn matrix_40xmx2_test() {
     test_range(2, 64, &|m| { matrix_madd_nmp(40, m, 2) });
 }
 
-
 #[test]
-fn matrix_1to20_sq() {
-    test_range(1, 20, &|n| {
-        println!("{}", n);
-        matrix_madd_n_sq(n)
+fn matrix_1to16_sq() {
+    test_range(1, 16, &|n| {
+        matrix_madd_n_sq(n * 32)
     })
 }
 

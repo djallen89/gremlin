@@ -51,23 +51,31 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
 }
 
 pub fn matrix_madd_multithread(threads: usize, n: usize,
-                               a: & [f64],
-                               b: & [f64],
+                               a: &[f64],
+                               b: &[f64],
                                c: &mut [f64]) {
     let rows = n / threads;
-    let (a1, a2) = a.split_at(rows * n);
-    let (c1, c2) = c.split_at_mut(rows * n);
+    let mut a_ptrs: Vec<&[f64]> = Vec::with_capacity(threads);
+    let mut c_ptrs: Vec<&mut [f64]> = Vec::with_capacity(threads);
 
-    let a_ptrs = [a1, a2];
-    let mut c_ptrs = [c1, c2];
+    let mut a2 = a;
+    let mut c2 = c;
+    for i in 0 .. threads  {
+        let (a1, _a2) = a2.split_at(rows * n);
+        let (c1, _c2) = c2.split_at_mut(rows * n);
+        a2 = _a2;
+        c2 = _c2;
+        a_ptrs.push(a1);
+        c_ptrs.push(c1);
+    }
 
-    let thread_arr: Vec<usize> = (0 .. threads).map(|x| x).collect();
+    //let _thread_arr: Vec<usize> = (0 .. threads).map(|x| x).collect();
 
-    c_ptrs.par_iter_mut().zip(a_ptrs.into_par_iter()).for_each(|(mut c_arr, a_arr)| {
+    c_ptrs.par_iter_mut().zip(a_ptrs.into_par_iter()).for_each(|(c_arr, a_arr)| {
         let a_ptr = &a_arr[0] as *const f64;
         let b_ptr = &b[0] as *const f64;
         //let c_ptr = &mut (c_ptrs[thread])[n * rows] as *mut f64;
-        let c_ptr = &mut (c_arr)[0] as *mut f64;
+        let c_ptr = &mut (*c_arr)[0] as *mut f64;
         //println!("len a: {}, len c: {}", a_arr.len(), c_arr.len());
         
         matrix_mul_add(n, n,
