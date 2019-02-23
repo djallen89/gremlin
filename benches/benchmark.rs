@@ -8,25 +8,22 @@ use ndarray::linalg::general_mat_mul;
 
 use criterion::{Benchmark, Criterion};
 
-fn bench_n_sq(crit: &mut Criterion, i: usize) {
-    let n = i;
-    let m = i;
-
+fn bench_n_sq(crit: &mut Criterion, n: usize) {
     let my_name = format!("my dgemm {}sq", n);
     let other_name = format!("ndarray {}sq", n);
     
-    let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
-    let b = random_array(n, m, -100.0, 100.0);
-    let mut c = random_array(n, m, -100.0, 100.0);
+    let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
+    let b = random_array(n, n, -10000.0, 10000.0);
+    let mut c = random_array(n, n, -10000.0, 10000.0);
 
-    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
+    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd(n, m, n, &a, &b, &mut c)
+            matrix_madd(n, n, n, &a, &b, &mut c)
         }))
         .with_function(other_name, move |bch| bch.iter(|| {
             general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
@@ -61,6 +58,18 @@ fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     crit.bench("dgemm", bench_def);
 }
 
+macro_rules! bench_n_sq {
+    ($name:ident, $n:expr) => {
+        fn $name(crit: &mut Criterion) {
+            bench_n_sq(crit, $n)
+        }
+    }
+}
+
+bench_n_sq!(bench_4_sq, 4);
+criterion_group!(small_4x_matrices, bench_4_sq);
+criterion_main!(small_4x_matrices);
+/*
 fn bench4x4(crit: &mut Criterion) {
     bench_n_sq(crit, 4);
 }
@@ -84,7 +93,6 @@ fn bench_27_sq(crit: &mut Criterion) {
 fn bench_28_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 28);
 }
-
 fn bench_29_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 29);
 }
@@ -250,11 +258,7 @@ fn bench_1492_1150_1201(crit: &mut Criterion) {
 }
 
 fn bench_2048x1(crit: &mut Criterion) {
-    let n = 1;
-    let m = 2048;
-    let p = 1;
-    
-    bench_nmp(n, m, p, crit);
+    bench_nmp(1, 2048, 1, crit);
 }
 
 fn bench_1xmx2048(crit: &mut Criterion) {
@@ -361,9 +365,6 @@ fn bench_1280_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 1280);
 }
 
-//(mapcar (lambda (x) (* x 32)) (list 41 42 43 44 45 46 47 48))
-//(1312 1344 1376 1408 1440 1472 1504 1536)
-
 fn bench_1312_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 1312);
 }
@@ -435,6 +436,14 @@ fn bench_1036_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 1036);
 }
 
+fn bench_1600_sq(crit: &mut Criterion) {
+    bench_n_sq(crit, 1600);
+}
+
+fn bench_1800_sq(crit: &mut Criterion) {
+    bench_n_sq(crit, 1800);
+}
+
 fn bench_2000_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 2000);
 }
@@ -486,7 +495,10 @@ criterion_main!(small_non4_matrices, small_4x_matrices, mid_non4_matrices,
                 vectors);
  */
 //criterion_main!(others);
+criterion_group!(k68, bench_1600_sq, bench_1800_sq);
 criterion_group!(t26, bench_1026_sq);
 criterion_group!(twok, bench_2000_sq, bench_2200_sq, bench_2400_sq,
                  bench_2600_sq, bench_2800_sq);
-criterion_main!(twok);
+
+criterion_main!(k68);
+*/
