@@ -33,7 +33,7 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     let slice = carr.as_slice().unwrap();
     
     matrix_madd(n, m, p, &a, &b, &mut c);
-
+    println!("Returned from matrix madd");
     test_equality(n, m, &c, &slice);
 }
 
@@ -42,18 +42,21 @@ fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut inequalities = String::new();
     let mut count = 0;
     for i in 0 .. rows {
+        println!("{}", i);
         for j in 0 .. cols {
             if !float_eq(c[i], correct[i]) {
                 equal = false;
-                inequalities = format!("{}\n{},{}: {} !={}", inequalities,
-                                       i + 1, j + 1, c[i], correct[i]);
+                if rows * cols < 128 {
+                    inequalities = format!("{}\n{},{}: {} !={}", inequalities,
+                                           i + 1, j + 1, c[i], correct[i]);
+                }
                 count += 1;
             }
         }
     }
     if equal {
         println!("Matrices are equal.");
-    } else if !equal && rows * cols <= 36 {
+    } else if !equal && rows * cols <= 128 {
         println!("Matrices are inequal");
         println!("{}", inequalities);
     } else {

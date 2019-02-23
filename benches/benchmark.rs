@@ -14,7 +14,7 @@ fn bench_n_sq(crit: &mut Criterion, i: usize) {
 
     let my_name = format!("my dgemm {}sq", n);
     let other_name = format!("ndarray {}sq", n);
-    let naive_name = format!("naive {}sq", n);
+    //let naive_name = format!("naive {}sq", n);
     
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(n, m, -100.0, 100.0);
@@ -251,7 +251,7 @@ fn bench_2048x1(crit: &mut Criterion) {
     let m = 2048;
     let p = 1;
     
-    bench_nmp(1, 2048, 1, crit);
+    bench_nmp(n, m, p, crit);
 }
 
 fn bench_1xmx2048(crit: &mut Criterion) {
@@ -271,6 +271,19 @@ criterion_group!(small_4x_matrices, bench4x4, bench_12_sq, bench_16_sq,
                  bench_124_sq, bench_128_sq);
 criterion_group!(mid_non4_matrices, bench_126_sq, bench_127_sq,
                  bench_129_sq, bench_130_sq);
+criterion_group!(mid_4x_matrices, bench_132_sq, bench_136_sq,
+                 bench_180_sq, bench_224_sq, bench_256_sq,
+                 bench_288_sq, bench_480_sq);
+criterion_group!(big_4x_matrices, bench_508_sq, bench_512_sq,
+                 bench_516_sq, bench_544_sq);
+criterion_group!(very_big_matrices, bench_736_sq, bench_768_sq,
+                 bench_800_sq, bench_992_sq, bench_1024_sq,
+                 bench_1056_sq, bench_1408_sq);                 
 criterion_group!(vectors, bench_2048x1, bench_1xmx2048);
-criterion_main!(small_non4_matrices);
+criterion_group!(various_4x, bench_32_sq, bench_64_sq, bench_128_sq,
+                 bench_256_sq, bench_512_sq, bench_768_sq, bench_1024_sq);
 
+criterion_main!(small_non4_matrices, small_4x_matrices, mid_non4_matrices,
+                mid_4x_matrices, big_4x_matrices, very_big_matrices,
+                vectors, various_4x);
+//criterion_main!(various_4x);

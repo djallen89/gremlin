@@ -44,5 +44,5 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
 
     matrix_mul_add(m_dim, p_cols,
                    n_rows, m_dim, p_cols, 
-                   a_ptr, b_ptr, c_ptr)
+                   a_ptr, b_ptr, c_ptr);
 }
