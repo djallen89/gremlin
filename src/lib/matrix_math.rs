@@ -454,7 +454,7 @@ pub fn minimatrix_fmadd_f64(m: usize, k: usize,
             }
             // Handle remaining ragged edges
             for (c_ele, b_ele) in c_row.into_remainder().iter_mut().zip(b_row.remainder()) {
-                *c_ele = (a_ele * *b_ele) + *c_ele
+                *c_ele = a_ele.mul_add(*b_ele, *c_ele)
             }
         }
     }

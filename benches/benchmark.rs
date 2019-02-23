@@ -489,4 +489,6 @@ criterion_main!(small_non4_matrices, small_4x_matrices, mid_non4_matrices,
 criterion_group!(t26, bench_1026_sq);
 criterion_group!(twok, bench_2000_sq, bench_2200_sq, bench_2400_sq,
                  bench_2600_sq, bench_2800_sq);
-criterion_main!(twok);
+//criterion_main!(twok);
+criterion_group!(four, bench4x4);
+criterion_main!(four);
