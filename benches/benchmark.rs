@@ -287,3 +287,4 @@ criterion_main!(small_non4_matrices, small_4x_matrices, mid_non4_matrices,
                 mid_4x_matrices, big_4x_matrices, very_big_matrices,
                 vectors, various_4x);
 //criterion_main!(various_4x);
+//criterion_main!(small_4x_matrices);

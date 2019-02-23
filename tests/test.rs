@@ -8,7 +8,6 @@ fn test_range(begin: usize, end: usize, func: &Fn(usize)) {
     }
 }
 
-/*
 #[test]
 fn matrix_1xn_test() {
     test_range(1, 512, &|n| { matrix_madd_nmp(1, n, 1) })
@@ -28,15 +27,14 @@ fn matrix_20xmx1_test() {
 fn matrix_40xmx2_test() {
     test_range(2, 64, &|m| { matrix_madd_nmp(40, m, 2) });
 }
-*/
+
 #[test]
 fn matrix_1to20_sq() {
-//    test_range(1, 20, &|n| {
-//        println!("{}", 4 *n);
+    test_range(1, 20, &|n| {
         matrix_madd_n_sq(15)
-//    })
+    })
 }
-/*
+
 #[test]
 fn matrix_7x6_6xn() {
     test_range(1, 10, &|n| {
@@ -66,7 +64,7 @@ fn matrix_28_to_36_sq() {
 fn matrix_60_to_68_sq() {
     test_range(60, 68, &matrix_madd_n_sq);
 }
-*/
+
 /*
 #[test]
 fn matrix_124_to_132_sq() {
