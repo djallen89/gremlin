@@ -423,7 +423,8 @@ pub fn minimatrix_fmadd_f64(m: usize, k: usize,
             let mut c_row = c_row.chunks_exact_mut(FUNROLL_LOOPS);
             let mut b_row = b_row.chunks_exact(FUNROLL_LOOPS);
             // A[i][j]
-            let a_ele = a[(i * m) + j];
+            //let a_ele = a[(i * m) + j];
+            let a_ele = a[get_idx(i, j, m)];
             let a_brick = unsafe { _mm256_broadcast_sd(&a_ele) };
             // row(C, i) = A[i][j] * row(B, j) + row(C, i)
             while let (Some(c_piece), Some(b_piece)) = (c_row.next(), b_row.next()) {
