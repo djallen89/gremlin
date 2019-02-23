@@ -42,12 +42,14 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
             
     } else if n_rows == 4 && p_cols == 4 && m_dim == 4 {
         
-        return minimatrix_fmadd_f64(m_dim, p_cols, a_ptr, b_ptr, c_ptr);
+        //return minimatrix_fmadd_f64(m_dim, p_cols, a_ptr, b_ptr, c_ptr);
+        return minimatrix_fmadd_f64(m_dim, p_cols, a, b, c);
         
     }
-
+    /*
     matrix_mul_add(m_dim, p_cols,
                    n_rows, m_dim, p_cols, 
                    a_ptr, b_ptr, c_ptr);
-
+     */
+     return minimatrix_fmadd_f64(m_dim, p_cols, a, b, c);
 }

@@ -42,7 +42,6 @@ fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut inequalities = String::new();
     let mut count = 0;
     for i in 0 .. rows {
-        println!("{}", i);
         for j in 0 .. cols {
             if !float_eq(c[i * cols + j], correct[i * cols + j]) {
                 equal = false;

@@ -2,6 +2,7 @@ use core::arch::x86_64::{__m256d, _mm256_broadcast_sd};
 use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
 use super::utilities::get_idx;
+use std::slice;
 
 pub trait FMADD {
     fn fmadd(&mut self, a: Self, b: Self);
@@ -271,8 +272,6 @@ pub fn matrix_mul_add(m_stride: usize,
             return matrix_vector_mul_add(m_stride, p_stride,
                                          n_rows, m_dim, &*a, &*b, c)
         }
-    } else if n_rows == 4 && p_cols == 4 && m_dim == 4 {
-        return minimatrix_fmadd_f64(m_stride, p_stride, a, b, c);
     } else if n_rows <= 160 && m_dim <= 160 && p_cols <= 160 {
         unsafe {
             return inner_matrix_mul_add(m_stride, p_stride,
@@ -341,8 +340,8 @@ pub fn matrix_mul_add(m_stride: usize,
         }
     }
 }
-
-/// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
+/*
+// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
 #[inline(always)]
 pub fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
                             a: *const f64, b: *const f64, c: *mut f64) {
@@ -379,6 +378,83 @@ pub fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
                 let a_elt = &*a.offset(aidx as isize);
                 let b_row = b.offset(b_elt as isize);
                 scalar_vec_fmadd_f64u(a_elt, b_row, c_row);
+            }
+        }
+    }
+}
+ */
+
+pub fn minimatrix_fmadd_f64(m: usize, k: usize,
+                            a: &[f64], b: &[f64], c: &mut [f64]) {
+    use std::arch::x86_64::{__m256d, _mm256_broadcast_sd, _mm256_fmadd_pd,
+                            _mm256_loadu_pd, _mm256_storeu_pd};
+    use std::mem::size_of;
+
+    const BRICK_LENGTH: usize = size_of::<__m256d>() / size_of::<f64>();
+    const FUNROLL_LOOPS: usize = BRICK_LENGTH * 4;
+    const BRICK_STEP: isize = size_of::<__m256d>() as isize;
+
+    // A is m x n
+    // B is n x k
+    // C is m x k
+    /* For 4x4 matrices, the first row of AB + C can be represented as:
+     *
+     * A11B11 + A12B21 + A13B31 + A14B41 + C11,
+     * A11B12 + A12B22 + A13B32 + A14B42 + C12,
+     * A11B13 + A12B23 + A13B33 + A14B43 + C13,
+     * A11B14 + A12B24 + A13B34 + A14B44 + C14
+     *
+     * However, the products and summation can be reordered:
+     *
+     * A11B11 + C11 = C11, A11B12 + C12 = C12, A11B13 + C13 = C13, A11B14 + C14 = C14,
+     * A12B21 + C11 = C11, A12B22 + C12 = C12, A12B23 + C13 = C13, A12B24 + C14 = C14,
+     * A13B31 + C11 = C11, A13B32 + C12 = C12, A13B33 + C13 = C13, A13B34 + C14 = C14,
+     * A14B41 + C11 = C11, A14B42 + C12 = C12, A14B43 + C13 = C13, A14B44 + C14 = C14,
+     *
+     * Generalizing this, one row (or 4 columns of one row) of C can be
+     * calculated in 4 iterations
+     * row(C, i) = A[i][j]*row(B, j) + row(C, i)
+     */
+
+    // row(C, i)
+    for (i, c_row) in c.chunks_exact_mut(k).enumerate() {
+        // row(B, j)
+        for (j, b_row) in b.chunks_exact(k).enumerate() {
+            let mut c_row = c_row.chunks_exact_mut(FUNROLL_LOOPS);
+            let mut b_row = b_row.chunks_exact(FUNROLL_LOOPS);
+            // A[i][j]
+            let a_ele = a[(i * m) + j];
+            let a_brick = unsafe { _mm256_broadcast_sd(&a_ele) };
+            // row(C, i) = A[i][j] * row(B, j) + row(C, i)
+            while let (Some(c_piece), Some(b_piece)) = (c_row.next(), b_row.next()) {
+                unsafe {
+                    let c_bricks: *mut f64 = c_piece.as_mut_ptr();
+                    let b_bricks: *const f64 = b_piece.as_ptr();
+
+                    let b_0 = _mm256_loadu_pd(b_bricks.offset(BRICK_STEP * 0));
+                    let b_1 = _mm256_loadu_pd(b_bricks.offset(BRICK_STEP * 1));
+                    let b_2 = _mm256_loadu_pd(b_bricks.offset(BRICK_STEP * 2));
+                    let b_3 = _mm256_loadu_pd(b_bricks.offset(BRICK_STEP * 3));
+
+                    let c_0 = _mm256_loadu_pd(c_bricks.offset(BRICK_STEP * 0));
+                    let c_1 = _mm256_loadu_pd(c_bricks.offset(BRICK_STEP * 1));
+                    let c_2 = _mm256_loadu_pd(c_bricks.offset(BRICK_STEP * 2));
+                    let c_3 = _mm256_loadu_pd(c_bricks.offset(BRICK_STEP * 3));          
+
+                    let c_0 = _mm256_fmadd_pd(a_brick, b_0, c_0);
+                    let c_1 = _mm256_fmadd_pd(a_brick, b_1, c_1);
+                    let c_2 = _mm256_fmadd_pd(a_brick, b_2, c_2);
+                    let c_3 = _mm256_fmadd_pd(a_brick, b_3, c_3);
+
+                    _mm256_storeu_pd(c_bricks.offset(BRICK_STEP * 0), c_0);
+                    _mm256_storeu_pd(c_bricks.offset(BRICK_STEP * 1), c_1);
+                    _mm256_storeu_pd(c_bricks.offset(BRICK_STEP * 2), c_2);
+                    _mm256_storeu_pd(c_bricks.offset(BRICK_STEP * 3), c_3);
+                }
+            }
+            // Handle remaining ragged edges
+            for (c_ele, b_ele) in c_row.into_remainder().iter_mut().zip(b_row.remainder()) {
+                *c_ele = (a_ele * *b_ele) + *c_ele
             }
         }
     }
@@ -510,14 +586,20 @@ unsafe fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
     for stripe in (0 .. row_stripes).step_by(MINIBLOCK) {
         for block in (0 .. sub_blocks).step_by(MINIBLOCK) {
             for pillar in (0 .. col_pillars).step_by(MINIBLOCK) {
-                let c_idx = get_idx(stripe, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
                 
                 let a_idx = get_idx(stripe, block, m_stride);
                 let b_idx = get_idx(block, pillar, p_stride);
+                let c_idx = get_idx(stripe, pillar, p_stride);
+                
                 let a_chunk = a.offset(a_idx as isize);
                 let b_chunk = b.offset(b_idx as isize);
-                minimatrix_fmadd_f64(m_stride, p_stride, a_chunk, b_chunk, c_chunk); 
+                let c_chunk = c.offset(c_idx as isize);
+                //minimatrix_fmadd_f64(m_stride, p_stride, a_chunk, b_chunk, c_chunk); 
+
+                let a_s = slice::from_raw_parts(a_chunk, MINIBLOCK * m_stride);
+                let b_s = slice::from_raw_parts(b_chunk, MINIBLOCK * p_stride);
+                let c_s = slice::from_raw_parts_mut(c_chunk, MINIBLOCK * p_stride);
+                minimatrix_fmadd_f64(m_stride, p_stride, a_s, b_s, c_s); 
             }
         }
 
