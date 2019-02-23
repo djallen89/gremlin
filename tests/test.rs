@@ -1,6 +1,4 @@
-use gremlin_lib::matrix_madd;
 use gremlin_lib::{matrix_madd_n_sq, matrix_madd_nmp};
-use gremlin_lib::test_equality;
 
 fn test_range(begin: usize, end: usize, func: &Fn(usize)) {
     for n in begin ..= end {
@@ -31,7 +29,7 @@ fn matrix_40xmx2_test() {
 #[test]
 fn matrix_1to20_sq() {
     test_range(1, 20, &|n| {
-        matrix_madd_n_sq(15)
+        matrix_madd_n_sq(n)
     })
 }
 
@@ -65,7 +63,6 @@ fn matrix_60_to_68_sq() {
     test_range(60, 68, &matrix_madd_n_sq);
 }
 
-/*
 #[test]
 fn matrix_124_to_132_sq() {
     test_range(1, 4, &|n| {
@@ -74,6 +71,7 @@ fn matrix_124_to_132_sq() {
     })
 }
 
+#[test]
 fn matrix_252_to_260_sq_test() {
     test_range(252, 260, &matrix_madd_n_sq)
 }
@@ -81,6 +79,11 @@ fn matrix_252_to_260_sq_test() {
 #[test]
 fn matrix_480_sq_test() {
     matrix_madd_n_sq(480);
+}
+
+#[test]
+fn matrix_507_sq_test() {
+    matrix_madd_n_sq(507);
 }
 
 #[test]
@@ -99,7 +102,16 @@ fn matrix_516_sq_test() {
 }
 
 #[test]
+fn matrix_613_sq_test() {
+    matrix_madd_n_sq(613);
+}
+
+#[test]
 fn matrix_768sq_test() {
     matrix_madd_n_sq(768);
 }
-*/
+
+#[test]
+fn bench_1492_1150_1201() {
+    matrix_madd_nmp(1492, 1150, 1201)
+}

@@ -13,25 +13,25 @@ fn bench_n_sq(crit: &mut Criterion, i: usize) {
     let m = i;
 
     let my_name = format!("my dgemm {}sq", n);
-    let other_name = format!("ndarray {}sq", n);
+    //let other_name = format!("ndarray {}sq", n);
     //let naive_name = format!("naive {}sq", n);
     
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(n, m, -100.0, 100.0);
     let mut c = random_array(n, m, -100.0, 100.0);
 
-    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
+    //let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    //let barr = Array::from_vec(b.clone()).into_shape((n, m)).unwrap();
+    //let mut carr = Array::from_vec(c.clone()).into_shape((n, m)).unwrap();
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
             matrix_madd(n, m, n, &a, &b, &mut c)
         }))
-        .with_function(other_name, move |bch| bch.iter(|| {
-            general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
-        }))
+        //.with_function(other_name, move |bch| bch.iter(|| {
+            //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
+        //}))
         .sample_size(10);
     
     crit.bench("dgemm", bench_def);
@@ -246,6 +246,10 @@ fn bench_1408_sq(crit: &mut Criterion) {
     bench_n_sq(crit, 1408);
 }
 
+fn bench_1492_1150_1201(crit: &mut Criterion) {
+    bench_nmp(1492, 1150, 1201, crit)
+}
+
 fn bench_2048x1(crit: &mut Criterion) {
     let n = 1;
     let m = 2048;
@@ -278,7 +282,7 @@ criterion_group!(big_4x_matrices, bench_508_sq, bench_512_sq,
                  bench_516_sq, bench_544_sq);
 criterion_group!(very_big_matrices, bench_736_sq, bench_768_sq,
                  bench_800_sq, bench_992_sq, bench_1024_sq,
-                 bench_1056_sq, bench_1408_sq);                 
+                 bench_1056_sq, bench_1408_sq, bench_1492_1150_1201);                 
 criterion_group!(vectors, bench_2048x1, bench_1xmx2048);
 criterion_group!(various_4x, bench_32_sq, bench_64_sq, bench_128_sq,
                  bench_256_sq, bench_512_sq, bench_768_sq, bench_1024_sq);
@@ -286,5 +290,8 @@ criterion_group!(various_4x, bench_32_sq, bench_64_sq, bench_128_sq,
 criterion_main!(small_non4_matrices, small_4x_matrices, mid_non4_matrices,
                 mid_4x_matrices, big_4x_matrices, very_big_matrices,
                 vectors, various_4x);
+
+//criterion_main!(very_big_matrices, big_4x_matrices, mid_4x_matrices, 
+//                vectors, various_4x);
 //criterion_main!(various_4x);
 //criterion_main!(small_4x_matrices);
