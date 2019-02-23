@@ -22,7 +22,7 @@ impl FMADD for f64 {
 }
 
 #[inline(always)]
-pub fn get_elt(row: usize, col: usize, n_cols: usize) -> usize {
+pub fn get_idx(row: usize, col: usize, n_cols: usize) -> usize {
     row * n_cols + col
 }
 
@@ -118,23 +118,21 @@ pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut i_msgs = String::new();
     let mut equal = true;
     let mut inequalities = 0;
+
     for i in 0 .. rows {
         for j in 0 .. cols {
-            if !float_eq(c[i], correct[i]) {
+            if !float_eq(c[i * cols + j], correct[i * cols + j]) {
                 inequalities += 1;
                 equal = false;
-                if rows * cols < 25 {
-                    i_msgs = format!("{} {},{}", i_msgs, i + 1, j + 1);
+                if rows * cols < 200 {
+                    i_msgs = format!("{}\n{},{}", i_msgs, i + 1, j + 1);
                 }
             }
-        }
-        if i_msgs.len() > 0 {
-            i_msgs = format!("{}\n", i_msgs);
         }
     }
 
     if !equal {
-        if rows * cols < 25 {
+        if rows * cols < 200 {
             panic!("{}", i_msgs);
         } else {
             panic!("{} inequalities", inequalities);
@@ -142,3 +140,42 @@ pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     }
 }
 
+pub fn check_dimensionality(n_rows: usize, m_dim: usize, p_cols: usize,
+                            a: &[f64],
+                            b: &[f64],
+                            c: &[f64]) -> Result<(), String> {
+    /* Check dimensionality */
+    let a_len = a.len();
+    let b_len = b.len();
+    let c_len = c.len();
+    /* Check for zeros before checking dimensions to prevent division by zero */
+    match (n_rows, p_cols, m_dim, a_len, b_len, c_len) {
+        (0, _, _, _, _, _) |  (_, 0, _, _, _, _) | (_, _, 0, _, _, _) |
+        (_, _, _, 0, _, _) | (_, _, _, _, 0, _) => {
+            return Err(format!("Cannot do matrix multiplication where A or B have 0 elements"))
+        },
+        (_, _, _, _, _, 0) => {
+            return Err(format!("Cannot do matrix multiplication where C has 0 elements"))
+        },
+        _ => {}
+    }
+
+    if a_len / n_rows != m_dim {
+        /* A is n * m*/
+        Err(format!("{}\n{}*{} == {} != {}",
+                    "Dimensionality of A does not match parameters.",
+                    n_rows, m_dim, n_rows * m_dim, a_len))
+    } else if b_len / p_cols != m_dim {
+        /* B is m * p */
+        Err(format!("{}\n{}*{} == {} != {}",
+                    "Dimensionality of B does not match parameters.",
+                    p_cols, m_dim, p_cols * m_dim, b_len))
+    } else if c_len / n_rows != p_cols {
+        /* C is n * p */
+        Err(format!("{}\n{}*{} == {} != {}",
+                    "Dimensionality of C does not match parameters.",
+                    n_rows, p_cols, n_rows * p_cols, c_len))
+    } else {
+        Ok(())
+    }
+}
