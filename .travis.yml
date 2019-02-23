@@ -1,9 +1,9 @@
 language: rust
 rust:
-	- nightly
+  - nightly
 
 cache: cargo
 
 script:
-	- cargo build --verbose
-	- cargo test
+  - cargo build --verbose
+  - cargo test
