@@ -164,15 +164,19 @@ unsafe fn inner_small_matrix_mul_add(m_stride: usize, p_stride: usize,
                                      n_rows: usize, m_dim: usize, p_cols: usize,
                                      a: *const f64, b: *const f64, c: *mut f64) {
 
-    const FUNLOOP: usize = 4;
-    let row_stop = n_rows - n_rows % FUNLOOP;
+    let funloop = if n_rows % 8 == 0 {
+        8
+    } else {
+        4
+    };
+    let row_stop = n_rows - n_rows % funloop;
     /* fewer than 4 columns */
     for column in 0 .. p_cols {
         for k in 0 .. m_dim {
             let b_idx = get_idx(k, column, p_stride);
             let b_elt = b.offset(b_idx as isize);
 
-            for row in (0 .. row_stop).step_by(FUNLOOP) {
+            for row in (0 .. row_stop).step_by(funloop) {
                 let mut a_row;
                 let mut c_row;
                 let a_idx1 = get_idx(row + 0, k, m_stride);
@@ -206,39 +210,39 @@ unsafe fn inner_small_matrix_mul_add(m_stride: usize, p_stride: usize,
                 *c_elt2 = c_row[1];
                 *c_elt3 = c_row[2];
                 *c_elt4 = c_row[3];
-                /*
-                let a_idx5 = get_idx(row + 4, k, m_stride);
-                let a_elt5 = a.offset(a_idx5 as isize);
-                let c_idx5 = get_idx(row + 4, column, p_stride);
-                let c_elt5 = c.offset(c_idx5 as isize);
-                //madd(a_elt5, b_elt, c_elt5);
+                if funloop == 8 {
+                    let a_idx5 = get_idx(row + 4, k, m_stride);
+                    let a_elt5 = a.offset(a_idx5 as isize);
+                    let c_idx5 = get_idx(row + 4, column, p_stride);
+                    let c_elt5 = c.offset(c_idx5 as isize);
+                    //madd(a_elt5, b_elt, c_elt5);
 
-                let a_idx6 = get_idx(row + 5, k, m_stride);
-                let a_elt6 = a.offset(a_idx6 as isize);
-                let c_idx6 = get_idx(row + 5, column, p_stride);
-                let c_elt6 = c.offset(c_idx6 as isize);
-                //madd(a_elt6, b_elt, c_elt6);
+                    let a_idx6 = get_idx(row + 5, k, m_stride);
+                    let a_elt6 = a.offset(a_idx6 as isize);
+                    let c_idx6 = get_idx(row + 5, column, p_stride);
+                    let c_elt6 = c.offset(c_idx6 as isize);
+                    //madd(a_elt6, b_elt, c_elt6);
 
-                let a_idx7 = get_idx(row + 6, k, m_stride);
-                let a_elt7 = a.offset(a_idx7 as isize);
-                let c_idx7 = get_idx(row + 6, column, p_stride);
-                let c_elt7 = c.offset(c_idx7 as isize);
-                //madd(a_elt7, b_elt, c_elt7);
-                
-                let a_idx8 = get_idx(row + 7, k, m_stride);
-                let a_elt8 = a.offset(a_idx8 as isize);
-                let c_idx8 = get_idx(row + 7, column, p_stride);
-                let c_elt8 = c.offset(c_idx8 as isize);
-                //madd(a_elt8, b_elt, c_elt8);
+                    let a_idx7 = get_idx(row + 6, k, m_stride);
+                    let a_elt7 = a.offset(a_idx7 as isize);
+                    let c_idx7 = get_idx(row + 6, column, p_stride);
+                    let c_elt7 = c.offset(c_idx7 as isize);
+                    //madd(a_elt7, b_elt, c_elt7);
+                    
+                    let a_idx8 = get_idx(row + 7, k, m_stride);
+                    let a_elt8 = a.offset(a_idx8 as isize);
+                    let c_idx8 = get_idx(row + 7, column, p_stride);
+                    let c_elt8 = c.offset(c_idx8 as isize);
+                    //madd(a_elt8, b_elt, c_elt8);
 
-                a_row = [*a_elt5, *a_elt6, *a_elt7, *a_elt8];
-                c_row = [*c_elt5, *c_elt6, *c_elt7, *c_elt8];
-                scalar_vec_fmadd_f64u(&*b_elt, a_row.as_ptr(), c_row.as_mut_ptr());
-                *c_elt5 = c_row[0];
-                *c_elt6 = c_row[1];
-                *c_elt7 = c_row[2];
-                *c_elt8 = c_row[3];
-                 */
+                    a_row = [*a_elt5, *a_elt6, *a_elt7, *a_elt8];
+                    c_row = [*c_elt5, *c_elt6, *c_elt7, *c_elt8];
+                    scalar_vec_fmadd_f64u(&*b_elt, a_row.as_ptr(), c_row.as_mut_ptr());
+                    *c_elt5 = c_row[0];
+                    *c_elt6 = c_row[1];
+                    *c_elt7 = c_row[2];
+                    *c_elt8 = c_row[3];
+                }
             }
 
             for row in row_stop .. n_rows {
