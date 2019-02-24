@@ -66,9 +66,6 @@ pub fn matrix_madd_parallel(n_rows: usize, m_dim: usize, p_cols: usize,
     }
 
     let threads = num_cpus::get_physical();
-    if threads > n_rows {
-        return matrix_madd(n_rows, m_dim, p_cols, a, b, c);
-    }
 
     let rows = n_rows / threads;
 

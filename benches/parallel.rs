@@ -68,38 +68,14 @@ macro_rules! bench_num_sq {
     }
 }
 
-bench_num_sq!(bench_4_sq);
-bench_num_sq!(bench_12_sq);
-bench_num_sq!(bench_16_sq);
-bench_num_sq!(bench_20_sq);
-bench_num_sq!(bench_28_sq);
-bench_num_sq!(bench_32_sq);
-bench_num_sq!(bench_36_sq);
-bench_num_sq!(bench_40_sq);
-bench_num_sq!(bench_44_sq);
-bench_num_sq!(bench_52_sq);
-bench_num_sq!(bench_56_sq);
-bench_num_sq!(bench_60_sq);
 bench_num_sq!(bench_64_sq);
 bench_num_sq!(bench_68_sq);
 bench_num_sq!(bench_80_sq);
 bench_num_sq!(bench_124_sq);
 bench_num_sq!(bench_128_sq);
-criterion_group!(small_4x_matrices, bench_4_sq, bench_12_sq, bench_16_sq,
-                 bench_20_sq, bench_28_sq, bench_32_sq, bench_36_sq,
-                 bench_40_sq, bench_44_sq, bench_52_sq, bench_56_sq,
-                 bench_60_sq, bench_64_sq, bench_68_sq, bench_80_sq,
+criterion_group!(small_4x_matrices, 
+                 bench_64_sq, bench_68_sq, bench_80_sq,
                  bench_124_sq, bench_128_sq);
-
-bench_num_sq!(bench_27_sq);
-bench_num_sq!(bench_29_sq);
-bench_num_sq!(bench_30_sq);
-bench_num_sq!(bench_31_sq);
-bench_num_sq!(bench_33_sq);
-bench_num_sq!(bench_34_sq);
-bench_num_sq!(bench_35_sq);
-criterion_group!(small_non4_matrices, bench_27_sq, bench_29_sq, bench_30_sq,
-                 bench_31_sq, bench_33_sq, bench_34_sq, bench_35_sq);
 
 bench_num_sq!(bench_126_sq);
 bench_num_sq!(bench_127_sq);
@@ -237,5 +213,5 @@ criterion_group!(gigantic, bench_2800_sq, bench_3000_sq, bench_3200_sq,
                  bench_3400_sq, bench_3600_sq, bench_3800_sq,
                  bench_4000_sq, bench_4250_sq, bench_4500_sq,
                  bench_4750_sq, bench_5000_sq);
-criterion_main!(vectors, small_4x_matrices, small_non4_matrices, mid_non4_matrices,
+criterion_main!(vectors, small_4x_matrices, mid_non4_matrices,
                 mid_4x_matrices, big_4x_matrices, very_big_matrices, huge_matrices);
