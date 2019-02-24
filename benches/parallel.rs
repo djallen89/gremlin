@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate criterion;
+extern crate num_cpus;
 use gremlin_lib;
 
 use gremlin_lib::{random_array, matrix_madd_parallel};
@@ -10,7 +11,7 @@ use criterion::{Benchmark, Criterion};
 
 fn bench_n_sq(crit: &mut Criterion, n: usize) {
     let my_name = format!("my dgemm parallel {}sq", n);
-    let other_name = format!("ndarray {}sq", n);
+    //let other_name = format!("ndarray {}sq", n);
     
     let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
     let b = random_array(n, n, -10000.0, 10000.0);
@@ -19,11 +20,12 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
     //let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
     //let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
     //let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+    let threads = num_cpus::get_physical();
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd_parallel(n, n, n, &a, &b, &mut c)
+            matrix_madd_parallel(threads, n, n, n, &a, &b, &mut c)
         }))
         //.with_function(other_name, move |bch| bch.iter(|| {
             //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
@@ -45,10 +47,12 @@ fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
     let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
     let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
+
+    let threads = num_cpus::get_physical();
     
     let bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd_parallel(n, m, p, &a, &b, &mut c);
+            matrix_madd_parallel(threads, n, m, p, &a, &b, &mut c);
         }))
         .with_function(other_name, move |bch| bch.iter(|| {
             general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);

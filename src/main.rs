@@ -32,7 +32,7 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
     let slice = carr.as_slice().unwrap();
     
-    matrix_madd_parallel(n, m, p, &a, &b, &mut c);
+    matrix_madd_parallel(8, n, m, p, &a, &b, &mut c);
     println!("Returned from matrix madd");
     test_equality(n, m, &c, &slice);
 }

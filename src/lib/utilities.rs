@@ -98,6 +98,7 @@ pub fn matrix_madd_nxm_parallel(n: usize, m: usize) {
 }
 
 pub fn matrix_madd_nmp_parallel(n: usize, m: usize, p: usize) {
+    let threads = num_cpus::get_physical();
     let a: Vec<f64> = random_array(n, m, -10000.0, 10000.0);
     let b = random_array(m, p, -10000.0, 10000.0);
     let mut c = random_array(n, p, -10000.0, 10000.0);
@@ -109,7 +110,7 @@ pub fn matrix_madd_nmp_parallel(n: usize, m: usize, p: usize) {
     general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
     let slice = carr.as_slice().unwrap();
     
-    matrix_madd_parallel(n, m, p, &a, &b, &mut c);
+    matrix_madd_parallel(threads, n, m, p, &a, &b, &mut c);
 
     test_equality(n, p, &c, &slice);
 }
