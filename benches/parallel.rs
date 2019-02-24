@@ -2,32 +2,32 @@
 extern crate criterion;
 use gremlin_lib;
 
-use gremlin_lib::{random_array, matrix_madd};
+use gremlin_lib::{random_array, matrix_madd_parallel};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 
 use criterion::{Benchmark, Criterion};
 
 fn bench_n_sq(crit: &mut Criterion, n: usize) {
-    let my_name = format!("my dgemm {}sq", n);
+    let my_name = format!("my dgemm parallel {}sq", n);
     let other_name = format!("ndarray {}sq", n);
     
     let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
     let b = random_array(n, n, -10000.0, 10000.0);
     let mut c = random_array(n, n, -10000.0, 10000.0);
 
-    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+    //let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
+    //let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
+    //let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd(n, n, n, &a, &b, &mut c)
+            matrix_madd_parallel(n, n, n, &a, &b, &mut c)
         }))
-        .with_function(other_name, move |bch| bch.iter(|| {
-            general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
-        }))
+        //.with_function(other_name, move |bch| bch.iter(|| {
+            //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
+        //}))
         .sample_size(10);
     
     crit.bench("dgemm", bench_def);
@@ -48,7 +48,7 @@ fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     
     let bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd(n, m, p, &a, &b, &mut c);
+            matrix_madd_parallel(n, m, p, &a, &b, &mut c);
         }))
         .with_function(other_name, move |bch| bch.iter(|| {
             general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
@@ -223,7 +223,19 @@ fn bench_1_1_2048(crit: &mut Criterion) {
 
 criterion_group!(vectors, bench_2048x1, bench_1_1_2048);
 
-//criterion_main!(k68);
-
+bench_num_sq!(bench_3000_sq);
+bench_num_sq!(bench_3200_sq);
+bench_num_sq!(bench_3400_sq);
+bench_num_sq!(bench_3600_sq);
+bench_num_sq!(bench_3800_sq);
+bench_num_sq!(bench_4000_sq);
+bench_num_sq!(bench_4250_sq);
+bench_num_sq!(bench_4500_sq);
+bench_num_sq!(bench_4750_sq);
+bench_num_sq!(bench_5000_sq);
+criterion_group!(gigantic, bench_2800_sq, bench_3000_sq, bench_3200_sq,
+                 bench_3400_sq, bench_3600_sq, bench_3800_sq,
+                 bench_4000_sq, bench_4250_sq, bench_4500_sq,
+                 bench_4750_sq, bench_5000_sq);
 criterion_main!(vectors, small_4x_matrices, small_non4_matrices, mid_non4_matrices,
                 mid_4x_matrices, big_4x_matrices, very_big_matrices, huge_matrices);

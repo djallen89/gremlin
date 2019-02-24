@@ -4,6 +4,7 @@ use rand::prelude::*;
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 use super::matrix_madd;
+use super::matrix_madd_parallel;
 
 pub trait FMADD {
     fn fmadd(&mut self, a: Self, b: Self);
@@ -64,43 +65,17 @@ pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
 }
 
 pub fn matrix_madd_n_sq(n: usize) {
-    let a: Vec<f64> = random_array(n, n, -100.0, 100.0);
-    let b = random_array(n, n, -100.0, 100.0);
-    let mut c = random_array(n, n, -100.0, 100.0);
-    
-    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
-
-    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
-    let slice = carr.as_slice().unwrap();
-    
-    matrix_madd(n, n, n, &a, &b, &mut c);
-
-    test_equality(n, n, &c, &slice);
+    matrix_madd_nmp(n, n, n);
 }
 
 pub fn matrix_madd_nxm(n: usize, m: usize) {
-    let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
-    let b = random_array(m, n, -100.0, 100.0);
-    let mut c = random_array(n, n, -100.0, 100.0);
-    
-    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((m, n)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
-
-    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
-    let slice = carr.as_slice().unwrap();
-    
-    matrix_madd(n, m, n, &a, &b, &mut c);
-
-    test_equality(n, m, &c, &slice);
+    matrix_madd_nmp(n, m, n);
 }
 
 pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
-    let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
-    let b = random_array(m, p, -100.0, 100.0);
-    let mut c = random_array(n, p, -100.0, 100.0);
+    let a: Vec<f64> = random_array(n, m, -10000.0, 10000.0);
+    let b = random_array(m, p, -10000.0, 10000.0);
+    let mut c = random_array(n, p, -10000.0, 10000.0);
     
     let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
     let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
@@ -114,17 +89,42 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     test_equality(n, p, &c, &slice);
 }
 
+pub fn matrix_madd_n_sq_parallel(n: usize) {
+    matrix_madd_nmp_parallel(n, n, n);
+}
+
+pub fn matrix_madd_nxm_parallel(n: usize, m: usize) {
+    matrix_madd_nmp_parallel(n, m, n);
+}
+
+pub fn matrix_madd_nmp_parallel(n: usize, m: usize, p: usize) {
+    let a: Vec<f64> = random_array(n, m, -10000.0, 10000.0);
+    let b = random_array(m, p, -10000.0, 10000.0);
+    let mut c = random_array(n, p, -10000.0, 10000.0);
+    
+    let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
+
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
+    matrix_madd_parallel(n, m, p, &a, &b, &mut c);
+
+    test_equality(n, p, &c, &slice);
+}
+
 pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut i_msgs = String::new();
     let mut equal = true;
     let mut inequalities = 0;
-
+    const LIM: usize = 50;
     for i in 0 .. rows {
         for j in 0 .. cols {
             if !float_eq(c[i * cols + j], correct[i * cols + j]) {
                 inequalities += 1;
                 equal = false;
-                if rows * cols < 200 {
+                if rows * cols < LIM {
                     i_msgs = format!("{}\n{},{}", i_msgs, i + 1, j + 1);
                 }
             }
@@ -132,7 +132,7 @@ pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     }
 
     if !equal {
-        if rows * cols < 200 {
+        if rows * cols < LIM {
             panic!("{}", i_msgs);
         } else {
             panic!("{} inequalities", inequalities);
