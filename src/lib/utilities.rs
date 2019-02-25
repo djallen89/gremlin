@@ -119,25 +119,32 @@ pub fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut i_msgs = String::new();
     let mut equal = true;
     let mut inequalities = 0;
+    let (mut last_i, mut last_j) = (0, 0);
     const LIM: usize = 50;
+
     for i in 0 .. rows {
         for j in 0 .. cols {
             if !float_eq(c[i * cols + j], correct[i * cols + j]) {
                 inequalities += 1;
-                equal = false;
                 if rows * cols < LIM {
                     i_msgs = format!("{}\n{},{}", i_msgs, i + 1, j + 1);
+                } else {
+                    if equal {
+                        i_msgs = format!("inequality at {}, {}", i + 1, j + 1)
+                    }
                 }
+                last_i = i + 1;
+                last_j = j + 1;
+                equal = false;
             }
         }
     }
 
     if !equal {
-        if rows * cols < LIM {
-            panic!("{}", i_msgs);
-        } else {
-            panic!("{} inequalities", inequalities);
-        }
+        panic!("{} inequalities,\n{}\n Last at {}, {}",
+               inequalities,
+               i_msgs,
+               last_i, last_j);
     }
 }
 

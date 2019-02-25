@@ -112,8 +112,53 @@ fn matrix_768sq_test() {
 }
 
 #[test]
-fn bench_1492_1150_1201() {
-    matrix_madd_nmp(1492, 1150, 1201)
+fn test_recurse_big_n() {
+    matrix_madd_nmp(959, 240, 240)
 }
 
+#[test]
+fn test_recurse_very_big_n() {
+    matrix_madd_nmp(1921, 240, 240)
+}
+
+#[test]
+fn test_recurse_big_m() {
+    matrix_madd_nmp(240, 959, 240)
+}
+
+#[test]
+fn test_recurse_very_big_m() {
+    matrix_madd_nmp(240, 1921, 240)
+}
+
+#[test]
+fn test_recurse_big_p() {
+    matrix_madd_nmp(240, 240, 959)
+}
+
+#[test]
+fn test_recurse_very_big_p() {
+    matrix_madd_nmp(240, 240, 1921)
+}
+
+#[test]
+fn test_recurse_big_nm() {
+    matrix_madd_nmp(959, 959, 240)
+}
+
+#[test]
+fn test_recurse_big_np() {
+    matrix_madd_nmp(959, 240, 959)
+}
+
+#[test]
+fn test_recurse_big_mp() {
+    matrix_madd_nmp(240, 959, 959)
+}
+/*
+#[test]
+fn test_1492_1150_1201() {
+    matrix_madd_nmp(1492, 1150, 1201)
+}
+*/
 

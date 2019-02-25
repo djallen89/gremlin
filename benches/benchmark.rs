@@ -222,8 +222,26 @@ fn bench_1_1_2048(crit: &mut Criterion) {
 }
 
 criterion_group!(vectors, bench_2048x1, bench_1_1_2048);
-
-//criterion_main!(k68);
-
-criterion_main!(vectors, small_4x_matrices, small_non4_matrices, mid_non4_matrices,
-                mid_4x_matrices, big_4x_matrices, very_big_matrices, huge_matrices);
+bench_num_sq!(bench_3000_sq);
+bench_num_sq!(bench_3200_sq);
+bench_num_sq!(bench_3400_sq);
+bench_num_sq!(bench_3600_sq);
+bench_num_sq!(bench_3800_sq);
+bench_num_sq!(bench_4000_sq);
+bench_num_sq!(bench_4250_sq);
+bench_num_sq!(bench_4500_sq);
+bench_num_sq!(bench_4750_sq);
+criterion_group!(gigantic, bench_2800_sq, bench_3000_sq, bench_3200_sq,
+                 bench_3400_sq, bench_3600_sq, bench_3800_sq,
+                 bench_4000_sq, bench_4250_sq, bench_4500_sq,
+                 bench_4750_sq);
+/*
+criterion_main!(vectors, small_4x_matrices, small_non4_matrices,
+                mid_non4_matrices, mid_4x_matrices,
+                big_4x_matrices, very_big_matrices,
+                huge_matrices, gigantic);
+ */
+criterion_main!(big_4x_matrices,
+                mid_4x_matrices,
+                very_big_matrices,
+                huge_matrices, gigantic);
