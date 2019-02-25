@@ -46,8 +46,8 @@ fn matrix_7x6_6xn_parallel() {
 
 #[test]
 fn matrix_nmp_small_parallel() {
-    for n in 1 .. 35 {
-        for m in 1 .. 35 {
+    for n in 20 .. 35 {
+        for m in 20 .. 35 {
             test_range(1, 35, &|p| {
                 matrix_madd_nmp_parallel(n, m, p)
             })
@@ -63,6 +63,10 @@ fn matrix_28_to_36_sq_parallel() {
     })
 }
 
+#[test]
+fn matrix_28_40_56_parallel() {
+    matrix_madd_nmp_parallel(28, 40, 56)
+}
 
 #[test]
 fn matrix_60_to_68_sq_parallel() {
