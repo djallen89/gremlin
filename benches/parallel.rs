@@ -42,8 +42,8 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
 
 fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     
-    let my_name = format!("my dgemm {}x{}x{}", n, m, p);
-    let other_name = format!("ndarray {}x{}x{}", n, m, p);
+    let my_name = format!("my dgemm parallel {}x{}x{}", n, m, p);
+    let other_name = format!("ndarray parallel {}x{}x{}", n, m, p);
 
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(m, p, -100.0, 100.0);
@@ -81,10 +81,9 @@ bench_num_sq!(bench_64_sq);
 bench_num_sq!(bench_68_sq);
 bench_num_sq!(bench_80_sq);
 bench_num_sq!(bench_124_sq);
-bench_num_sq!(bench_128_sq);
 criterion_group!(small_4x_matrices, 
                  bench_64_sq, bench_68_sq, bench_80_sq,
-                 bench_124_sq, bench_128_sq);
+                 bench_124_sq);
 
 bench_num_sq!(bench_126_sq);
 bench_num_sq!(bench_127_sq);
@@ -93,6 +92,7 @@ bench_num_sq!(bench_130_sq);
 criterion_group!(mid_non4_matrices, bench_126_sq, bench_127_sq,
                  bench_129_sq, bench_130_sq);
 
+bench_num_sq!(bench_128_sq);
 bench_num_sq!(bench_132_sq);
 bench_num_sq!(bench_136_sq);
 bench_num_sq!(bench_180_sq);
@@ -108,7 +108,8 @@ bench_num_sq!(bench_384_sq);
 bench_num_sq!(bench_416_sq);
 bench_num_sq!(bench_448_sq);
 bench_num_sq!(bench_480_sq);
-criterion_group!(mid_4x_matrices, bench_132_sq, bench_136_sq, bench_180_sq,
+criterion_group!(mid_4x_matrices, bench_128_sq,
+                 bench_132_sq, bench_136_sq, bench_180_sq,
                  bench_224_sq, bench_256_sq, bench_288_sq,
                  bench_300_sq, bench_320_sq, bench_340_sq,
                  bench_352_sq, bench_360_sq, bench_384_sq,
@@ -223,11 +224,11 @@ criterion_group!(gigantic, bench_2800_sq, bench_3000_sq, bench_3200_sq,
                  bench_4000_sq, bench_4250_sq, bench_4500_sq,
                  bench_4750_sq, bench_5000_sq);
 
-criterion_main!(gigantic,
-                huge_matrices,
-                small_4x_matrices,
-                mid_4x_matrices,
+criterion_main!(small_4x_matrices,
                 mid_non4_matrices,
-                big_4x_matrices,
-                very_big_matrices);
+                mid_4x_matrices,
+                big_4x_matrices, 
+                huge_matrices,
+                very_big_matrices,
+                gigantic,);
 

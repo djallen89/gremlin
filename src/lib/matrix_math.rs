@@ -3,20 +3,26 @@ use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
 use super::utilities::get_idx;
 
-/* Microblocks should fit into the register space of x86-64. */
+/* Microblocks should fit into the register space of amd64. */
 const MICROBLOCK: usize = 4;
-//(/ (* 32 1024) 3 8 48) 28
-const MINIBLOCKROW: usize = 28;
-const MINIBLOCKCOL: usize = 48;
-const MINIBLOCKM: usize = 32;
-//(/ (* 3.0 8 80 264) 1024) 495.0
+/* Miniblocks should fit into L1D cache (optimized for amd64) */
+//(- (/ (* 32 1024) 3 8 32) (% (/ (* 32 1024) 3 8 32) 4)) 40
+const MINIBLOCKROW: usize = 32;
+const MINIBLOCKCOL: usize = 40;
+const MINIBLOCKM: usize = MINIBLOCKCOL;
+/* Blocks should fit into L2 cache (optimized for amd64) */
+//(/ (* 512 1024) 3 8 80) 273
+//(- (/ (* 512 1024) 3 8 80) (% (/ (* 512 1024) 3 8 80) 32)) 256
 const BLOCKROW: usize = 80;
-const BLOCKCOL: usize = 264;
+const BLOCKCOL: usize = 256;
 const BLOCKM: usize = 80;
-//(/ (* 3.0 8 516 672) 1024 1024) 
-const MEGABLOCKROW: usize = 516;
-const MEGABLOCKCOL: usize = 672;
-const MEGABLOCKM: usize = 460;
+/* Megablocks should fit into L3 cache. 
+This should probably be parameterized since it varies much by architecture. */
+//(/ (* 8 1024 1024) 3 8 480) 728
+//(- (/ (* 8 1024 1024) 3 8 480) (% (/ (* 8 1024 1024) 3 8 480) 80)) 720
+const MEGABLOCKROW: usize = 480;
+const MEGABLOCKCOL: usize = 720;
+const MEGABLOCKM: usize = 720;
 
 pub trait FMADD {
     fn fmadd(&mut self, a: Self, b: Self);
@@ -177,89 +183,20 @@ pub fn small_matrix_mul_add(n_rows: usize, m_dim: usize, p_cols: usize,
 unsafe fn inner_small_matrix_mul_add(m_stride: usize, p_stride: usize,
                                      n_rows: usize, m_dim: usize, p_cols: usize,
                                      a: *const f64, b: *const f64, c: *mut f64) {
-
-    let funloop = if n_rows % 8 == 0 {
-        8
-    } else {
-        4
-    };
-    let row_stop = n_rows - n_rows % funloop;
-    /* fewer than 4 columns */
-    for column in 0 .. p_cols {
+    for row in 0 .. n_rows {
         for k in 0 .. m_dim {
-            let b_idx = get_idx(k, column, p_stride);
-            let b_elt = b.offset(b_idx as isize);
-
-            for row in (0 .. row_stop).step_by(funloop) {
-                let mut a_row;
-                let mut c_row;
-                let a_idx1 = get_idx(row + 0, k, m_stride);
-                let a_elt1 = a.offset(a_idx1 as isize);
-                let c_idx1 = get_idx(row + 0, column, p_stride);
-                let c_elt1 = c.offset(c_idx1 as isize);
-
-                let a_idx2 = get_idx(row + 1, k, m_stride);
-                let a_elt2 = a.offset(a_idx2 as isize);
-                let c_idx2 = get_idx(row + 1, column, p_stride);
-                let c_elt2 = c.offset(c_idx2 as isize);
+            let a_idx = get_idx(row, k, m_stride);
+            let a_elt = a.offset(a_idx as isize);
+    
+            for column in 0 .. p_cols {
+                let b_idx = get_idx(k, column, p_stride);
+                let b_elt = b.offset(b_idx as isize);
                 
-                let a_idx3 = get_idx(row + 2, k, m_stride);
-                let a_elt3 = a.offset(a_idx3 as isize);
-                let c_idx3 = get_idx(row + 2, column, p_stride);
-                let c_elt3 = c.offset(c_idx3 as isize);
-
-                let a_idx4 = get_idx(row + 3, k, m_stride);
-                let a_elt4 = a.offset(a_idx4 as isize);
-                let c_idx4 = get_idx(row + 3, column, p_stride);
-                let c_elt4 = c.offset(c_idx4 as isize);
-
-                a_row = [*a_elt1, *a_elt2, *a_elt3, *a_elt4];
-                c_row = [*c_elt1, *c_elt2, *c_elt3, *c_elt4];
-                scalar_vec_fmadd_f64u(&*b_elt, a_row.as_ptr(), c_row.as_mut_ptr());
-                *c_elt1 = c_row[0];
-                *c_elt2 = c_row[1];
-                *c_elt3 = c_row[2];
-                *c_elt4 = c_row[3];
-                if funloop == 8 {
-                    let a_idx5 = get_idx(row + 4, k, m_stride);
-                    let a_elt5 = a.offset(a_idx5 as isize);
-                    let c_idx5 = get_idx(row + 4, column, p_stride);
-                    let c_elt5 = c.offset(c_idx5 as isize);
-
-                    let a_idx6 = get_idx(row + 5, k, m_stride);
-                    let a_elt6 = a.offset(a_idx6 as isize);
-                    let c_idx6 = get_idx(row + 5, column, p_stride);
-                    let c_elt6 = c.offset(c_idx6 as isize);
-
-                    let a_idx7 = get_idx(row + 6, k, m_stride);
-                    let a_elt7 = a.offset(a_idx7 as isize);
-                    let c_idx7 = get_idx(row + 6, column, p_stride);
-                    let c_elt7 = c.offset(c_idx7 as isize);
-                    
-                    let a_idx8 = get_idx(row + 7, k, m_stride);
-                    let a_elt8 = a.offset(a_idx8 as isize);
-                    let c_idx8 = get_idx(row + 7, column, p_stride);
-                    let c_elt8 = c.offset(c_idx8 as isize);
-
-                    a_row = [*a_elt5, *a_elt6, *a_elt7, *a_elt8];
-                    c_row = [*c_elt5, *c_elt6, *c_elt7, *c_elt8];
-                    scalar_vec_fmadd_f64u(&*b_elt, a_row.as_ptr(), c_row.as_mut_ptr());
-                    *c_elt5 = c_row[0];
-                    *c_elt6 = c_row[1];
-                    *c_elt7 = c_row[2];
-                    *c_elt8 = c_row[3];
-                }
-            }
-
-            for row in row_stop .. n_rows {
-                let a_idx = get_idx(row, k, m_stride);
-                let a_elt = a.offset(a_idx as isize);
                 let c_idx = get_idx(row, column, p_stride);
-                let c_elt = c.offset(c_idx as isize);
-                madd(a_elt, b_elt, c_elt);
+                madd(a_elt, b_elt, c.offset(c_idx as isize));
             }
-
         }
+
     }
 }
 
@@ -281,25 +218,13 @@ pub fn matrix_mul_add(m_stride: usize,
         unsafe {
             minimatrix_fmadd_f64(m_stride, p_stride, a, b, c);
         }
-    } /*else if n_rows <= MINIBLOCK && m_dim <= MINIBLOCK && p_cols <= MINIBLOCK {
+    } else if n_rows <= MINIBLOCKROW && m_dim <= MINIBLOCKM && p_cols <= MINIBLOCKCOL {
         unsafe {
             inner_matrix_mul_add(m_stride, p_stride,
                                  n_rows, m_dim, p_cols,
                                  a, b, c);
         }        
-    } else if n_rows <= BLOCK && m_dim <= BLOCK && p_cols <= BLOCK {
-        unsafe {
-            middle_matrix_mul_add(m_stride, p_stride,
-                                  n_rows, m_dim, p_cols,
-                                  a, b, c);
-        }
-    } else if n_rows <= MEGABLOCK && m_dim <= MEGABLOCK && p_cols <= MEGABLOCK {
-        unsafe {
-            outer_matrix_mul_add(m_stride, p_stride,
-                                 n_rows, m_dim, p_cols,
-                                 a, b, c);
-        }
-    } */else {
+    } else {
         big_matrix_mul_add(m_stride, p_stride,
                            n_rows, m_dim, p_cols,
                            a, b, c)
