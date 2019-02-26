@@ -3,15 +3,16 @@ use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd,  _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
 use super::utilities::get_idx;
 
+/* Microblocks should fit into the register space of x86-64. */
 const MICROBLOCK: usize = 4;
-//(/ (* 3 8 32 40) 1024) 33
-const MINIBLOCKROW: usize = 32;
-const MINIBLOCKCOL: usize = 40;
+//(/ (* 32 1024) 3 8 48) 28
+const MINIBLOCKROW: usize = 28;
+const MINIBLOCKCOL: usize = 48;
 const MINIBLOCKM: usize = 32;
-//(/ (* 3 8 116 188) 1024) 511
-const BLOCKROW: usize = 116;
-const BLOCKCOL: usize = 188;
-const BLOCKM: usize = 160;
+//(/ (* 3.0 8 80 264) 1024) 495.0
+const BLOCKROW: usize = 80;
+const BLOCKCOL: usize = 264;
+const BLOCKM: usize = 80;
 //(/ (* 3.0 8 516 672) 1024 1024) 
 const MEGABLOCKROW: usize = 516;
 const MEGABLOCKCOL: usize = 672;
@@ -68,7 +69,6 @@ unsafe fn vectorized_range_dot_prod_add(row: *const f64, col: *const f64,
     _mm256_storeu_pd(store.as_mut_ptr(), c);
     *c_elt += store[0] + store[1] + store[2] + store[3];
 }
-
 
 pub fn scalar_vector_fmadd(length: usize, alpha: f64, b: *const f64, c: *mut f64) {
     let end = length - length % 4;
@@ -278,9 +278,9 @@ pub fn matrix_mul_add(m_stride: usize,
                                   n_rows, m_dim, &*a, &*b, c)
         }
     } else if n_rows == MICROBLOCK && p_cols == MICROBLOCK && m_dim == MICROBLOCK {
-        
-        minimatrix_fmadd_f64(m_stride, p_stride, a, b, c);
-        
+        unsafe {
+            minimatrix_fmadd_f64(m_stride, p_stride, a, b, c);
+        }
     } /*else if n_rows <= MINIBLOCK && m_dim <= MINIBLOCK && p_cols <= MINIBLOCK {
         unsafe {
             inner_matrix_mul_add(m_stride, p_stride,
@@ -371,8 +371,9 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
 }
 
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
-#[inline(always)]
-pub fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
+#[target_feature(enable = "avx2")]
+#[cfg(any(target_arch = "x86_64"))]
+unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
                             a: *const f64, b: *const f64, c: *mut f64) {
     /* For 4x4 matrices, the first row of AB + C can be represented as:
      *
@@ -392,23 +393,34 @@ pub fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
      * calculated in 4 iterations 
      * row(C, i) = A[i][j]*row(B, j) + row(C, i)
      */
-    
-    for row in 0 .. 4 {
-        let c_elt = get_idx(row, 0, p_stride);
-        let c_row;
-        unsafe {
-            c_row = c.offset(c_elt as isize);
-        }
 
+    let mut a_arr: [f64; 16] = [0.0; 16];
+    let mut b_ptrs: [*const f64; 4] = [0 as *const f64; 4];
+    for row in 0 .. 4 {
         for column in 0 .. 4 {
-            let b_elt = get_idx(column, 0, p_stride);
-            let aidx = get_idx(row, column, m_stride);
-            unsafe {
-                let a_elt = &*a.offset(aidx as isize);
-                let b_row = b.offset(b_elt as isize);
-                scalar_vec_fmadd_f64u(a_elt, b_row, c_row);
-            }
+            let a_idx = get_idx(row, column, m_stride);
+            a_arr[row * 4 + column] = *a.offset(a_idx as isize);
         }
+    }
+
+    for row in 0 .. 4 {
+        let b_idx = get_idx(row, 0, p_stride);
+        b_ptrs[row] = b.offset(b_idx as isize);
+    }
+
+    for row in 0 .. 4 {
+        let c_idx = get_idx(row, 0, p_stride);
+        let c_elt = c.offset(c_idx as isize);
+        let mut c_row: __m256d = _mm256_loadu_pd(c_elt as *const f64);
+        for column in 0 .. 4 {
+            let a_idx = get_idx(row, column, 4);
+            let a_elt = &a_arr[a_idx];
+            let a_mult: __m256d = _mm256_broadcast_sd(a_elt);
+            let b_elt = b_ptrs[column];
+            let b_row: __m256d = _mm256_loadu_pd(b_elt);
+            c_row = _mm256_fmadd_pd(a_mult, b_row, c_row);
+        }
+        _mm256_storeu_pd(c_elt, c_row);
     }
 }
 

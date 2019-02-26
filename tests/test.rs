@@ -7,6 +7,16 @@ fn test_range(begin: usize, end: usize, func: &Fn(usize)) {
 }
 
 #[test]
+fn matrix_4x4_test() {
+    matrix_madd_n_sq(4);
+}
+
+#[test]
+fn matrix_5x5_test() {
+    matrix_madd_n_sq(5);
+}
+
+#[test]
 fn matrix_1xn_test() {
     test_range(1, 512, &|n| { matrix_madd_nmp(1, n, 1) })
 }
@@ -155,10 +165,9 @@ fn test_recurse_big_np() {
 fn test_recurse_big_mp() {
     matrix_madd_nmp(240, 959, 959)
 }
-/*
+
 #[test]
 fn test_1492_1150_1201() {
     matrix_madd_nmp(1492, 1150, 1201)
 }
-*/
 

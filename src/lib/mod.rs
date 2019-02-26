@@ -13,7 +13,7 @@ pub use utilities::{matrix_madd_n_sq_parallel, matrix_madd_nxm_parallel,
                     matrix_madd_nmp_parallel};
 use utilities::check_dimensionality;
 use matrix_math::{single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
-use matrix_math::{minimatrix_fmadd_f64, scalar_vector_fmadd};
+use matrix_math::scalar_vector_fmadd;
 use rayon::prelude::*;
 use danger_math::Ptr;
 
@@ -43,11 +43,7 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
 
         return small_matrix_mul_add(n_rows, m_dim, p_cols, a, b, c)
             
-    } else if n_rows == 4 && p_cols == 4 && m_dim == 4 {
-        
-        return minimatrix_fmadd_f64(m_dim, p_cols, a_ptr, b_ptr, c_ptr);
-        
-    }
+    } 
 
     matrix_mul_add(m_dim, p_cols,
                    n_rows, m_dim, p_cols, 
