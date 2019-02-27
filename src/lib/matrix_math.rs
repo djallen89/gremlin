@@ -6,23 +6,24 @@ use super::utilities::get_idx;
 /* Microblocks should fit into the register space of amd64. */
 const MICROBLOCK: usize = 4;
 /* Miniblocks should fit into L1D cache (optimized for amd64) */
-//(- (/ (* 32 1024) 3 8 32) (% (/ (* 32 1024) 3 8 32) 4)) 40
+//(- (/ (* 32 1024) 3 8 64) (% (/ (* 32 1024) 3 8 64) 4)) 20
 const MINIBLOCKROW: usize = 32;
 const MINIBLOCKCOL: usize = 40;
 const MINIBLOCKM: usize = MINIBLOCKCOL;
 /* Blocks should fit into L2 cache (optimized for amd64) */
-//(/ (* 512 1024) 3 8 80) 273
-//(- (/ (* 512 1024) 3 8 80) (% (/ (* 512 1024) 3 8 80) 32)) 256
-const BLOCKROW: usize = 80;
-const BLOCKCOL: usize = 256;
+//(/ (* 512 1024) 3 8 240) 91
+//(- (/ (* 512 1024) 3 8 240) (% (/ (* 512 1024) 3 8 240) 4)) 88
+//old was 80 and 256
+const BLOCKROW: usize = 88;
+const BLOCKCOL: usize = 240;
 const BLOCKM: usize = 80;
 /* Megablocks should fit into L3 cache. 
 This should probably be parameterized since it varies much by architecture. */
-//(/ (* 8 1024 1024) 3 8 480) 728
-//(- (/ (* 8 1024 1024) 3 8 480) (% (/ (* 8 1024 1024) 3 8 480) 80)) 720
+//(/ (* 8 1024 1024) 3 8 640) 546
+//(- (/ (* 8 1024 1024) 3 8 640) (% (/ (* 8 1024 1024) 3 8 640) 32)) 544
 const MEGABLOCKROW: usize = 480;
 const MEGABLOCKCOL: usize = 720;
-const MEGABLOCKM: usize = 720;
+const MEGABLOCKM: usize = 480;
 
 pub trait FMADD {
     fn fmadd(&mut self, a: Self, b: Self);
@@ -472,8 +473,8 @@ unsafe fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
     let p_cols_rem =  p_cols - col_pillars;
 
     for stripe in (0 .. row_stripes).step_by(MINIBLOCKROW) {
-        for block in (0 .. sub_blocks).step_by(MINIBLOCKM) {
-            for pillar in (0 .. col_pillars).step_by(MINIBLOCKCOL) {
+        for pillar in (0 .. col_pillars).step_by(MINIBLOCKCOL) {
+            for block in (0 .. sub_blocks).step_by(MINIBLOCKM) {
                 let c_idx = get_idx(stripe, pillar, p_stride);
                 let c_block = c.offset(c_idx as isize);
 
@@ -624,11 +625,13 @@ unsafe fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
                                        MICROBLOCK, m_dim_rem, p_cols_rem,
                                        a_chunk, b_chunk, c_chunk);
         }
+
         
         /* Finish adding remaining the products of A's columns by b's rows */
-        for row in 0 .. MICROBLOCK {
+        // This is a good arrangement
+        for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
             for k in sub_blocks .. m_dim {
-                for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
+                for row in 0 .. MICROBLOCK {
                     let c_idx = get_idx(stripe + row, pillar, p_stride);
                     let c_row = c.offset(c_idx as isize);
 
@@ -642,6 +645,25 @@ unsafe fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
             }
         }
 
+    }
+
+    for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
+        for k in 0 .. m_dim {
+            let b_idx = get_idx(k, pillar, p_stride);
+            let b_row_vec = _mm256_loadu_pd(b.offset(b_idx as isize));
+
+            for row in row_stripes .. n_rows {
+                let c_idx = get_idx(row, pillar, p_stride);
+                let mut c_row_vec = _mm256_loadu_pd(c.offset(c_idx as isize));
+
+                let a_idx = get_idx(row, k, m_dim);
+                let a_elt = a.offset(a_idx as isize);
+                let a_elt_mult = _mm256_broadcast_sd(&*a_elt);
+
+                c_row_vec = _mm256_fmadd_pd(a_elt_mult, b_row_vec, c_row_vec);
+                _mm256_storeu_pd(c.offset(c_idx as isize), c_row_vec);
+            }
+        }
     }
 
     /* Calculate the right columns of C*/
@@ -658,24 +680,5 @@ unsafe fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
         inner_small_matrix_mul_add(m_stride, p_stride,
                                    n_rows_rem, m_dim, p_cols_rem,
                                    a_stripe, b_cols, c_chunk);
-    }
-
-    for row in row_stripes .. n_rows {
-        for k in 0 .. m_dim {
-            let a_idx = get_idx(row, k, m_dim);
-            let a_elt = a.offset(a_idx as isize);
-            let a_elt_mult = _mm256_broadcast_sd(&*a_elt);
-            
-            for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
-                let b_idx = get_idx(k, pillar, p_stride);
-                let b_row_vec = _mm256_loadu_pd(b.offset(b_idx as isize));
-
-                let c_idx = get_idx(row, pillar, p_stride);
-                let mut c_row_vec = _mm256_loadu_pd(c.offset(c_idx as isize));
-                
-                c_row_vec = _mm256_fmadd_pd(a_elt_mult, b_row_vec, c_row_vec);
-                _mm256_storeu_pd(c.offset(c_idx as isize), c_row_vec);
-            }
-        }
     }
 }

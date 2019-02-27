@@ -83,13 +83,11 @@ bench_num_sq!(bench_60_sq);
 bench_num_sq!(bench_64_sq);
 bench_num_sq!(bench_68_sq);
 bench_num_sq!(bench_80_sq);
-bench_num_sq!(bench_124_sq);
-bench_num_sq!(bench_128_sq);
 criterion_group!(small_4x_matrices, bench_4_sq, bench_12_sq, bench_16_sq,
                  bench_20_sq, bench_28_sq, bench_32_sq, bench_36_sq,
                  bench_40_sq, bench_44_sq, bench_52_sq, bench_56_sq,
-                 bench_60_sq, bench_64_sq, bench_68_sq, bench_80_sq,
-                 bench_124_sq, bench_128_sq);
+                 bench_60_sq, bench_64_sq, bench_68_sq, bench_80_sq);
+
 
 bench_num_sq!(bench_27_sq);
 bench_num_sq!(bench_29_sq);
@@ -108,6 +106,8 @@ bench_num_sq!(bench_130_sq);
 criterion_group!(mid_non4_matrices, bench_126_sq, bench_127_sq,
                  bench_129_sq, bench_130_sq);
 
+bench_num_sq!(bench_124_sq);
+bench_num_sq!(bench_128_sq);
 bench_num_sq!(bench_132_sq);
 bench_num_sq!(bench_136_sq);
 bench_num_sq!(bench_180_sq);
@@ -123,7 +123,8 @@ bench_num_sq!(bench_384_sq);
 bench_num_sq!(bench_416_sq);
 bench_num_sq!(bench_448_sq);
 bench_num_sq!(bench_480_sq);
-criterion_group!(mid_4x_matrices, bench_132_sq, bench_136_sq, bench_180_sq,
+criterion_group!(mid_4x_matrices, bench_124_sq, bench_128_sq,
+                 bench_132_sq, bench_136_sq, bench_180_sq,
                  bench_224_sq, bench_256_sq, bench_288_sq,
                  bench_300_sq, bench_320_sq, bench_340_sq,
                  bench_352_sq, bench_360_sq, bench_384_sq,
@@ -235,8 +236,49 @@ criterion_group!(gigantic, bench_2800_sq, bench_3000_sq, bench_3200_sq,
                  bench_3400_sq, bench_3600_sq, bench_3800_sq,
                  bench_4000_sq, bench_4250_sq, bench_4500_sq,
                  bench_4750_sq);
+/*
+bench_num_sq!(bench_252_sq);
+bench_num_sq!(bench_254_sq);
+bench_num_sq!(bench_255_sq);
+bench_num_sq!(bench_257_sq);
+bench_num_sq!(bench_258_sq);
+bench_num_sq!(bench_260_sq);
+bench_num_sq!(bench_510_sq);
+bench_num_sq!(bench_511_sq);
+bench_num_sq!(bench_513_sq);
+bench_num_sq!(bench_514_sq);
+*/
+bench_num_sq!(bench_764_sq);
+bench_num_sq!(bench_766_sq);
+bench_num_sq!(bench_767_sq);
+bench_num_sq!(bench_769_sq);
+bench_num_sq!(bench_770_sq);
+bench_num_sq!(bench_772_sq);
+criterion_group!(hot_spots,
+                 //bench_124_sq, bench_126_sq, bench_127_sq,
+                 bench_128_sq,
+                 //bench_129_sq, bench_130_sq, bench_132_sq,
+                 
+                 //bench_252_sq, bench_254_sq, bench_255_sq,
+                 bench_256_sq,
+                 //bench_257_sq, bench_258_sq, bench_260_sq,
+                 
+                 //bench_508_sq, bench_510_sq, bench_511_sq,
+                 bench_512_sq,
+                 //bench_513_sq, bench_514_sq, bench_516_sq,
+
+                 bench_764_sq, bench_766_sq, bench_767_sq,
+                 bench_768_sq,
+                 bench_769_sq, bench_770_sq, bench_772_sq,
+                 
+                 bench_1020_sq, bench_1022_sq, bench_1023_sq,
+                 bench_1024_sq,
+                 bench_1025_sq, bench_1026_sq, bench_1028_sq);
+
+//criterion_main!(hot_spots);
 
 /* Not including vectors */
+
 criterion_main!(small_non4_matrices,
                 small_4x_matrices,
                 mid_4x_matrices,
@@ -245,3 +287,4 @@ criterion_main!(small_non4_matrices,
                 very_big_matrices,
                 huge_matrices,
                 gigantic);
+
