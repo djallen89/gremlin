@@ -196,12 +196,11 @@ bench_num_sq!(bench_2400_sq);
 bench_num_sq!(bench_2600_sq);
 bench_num_sq!(bench_2800_sq);
 
-
+/*
 fn bench_1492_1150_1201(crit: &mut Criterion) {
     bench_nmp(1492, 1150, 1201, crit);
 }
-
-criterion_group!(rando, bench_1492_1150_1201);
+*/
 
 criterion_group!(huge_matrices,
                  bench_1152_sq, bench_1184_sq,

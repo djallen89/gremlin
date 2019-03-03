@@ -191,8 +191,8 @@ pub fn matrix_mul_add(m_stride: usize,
                              a, b, c);
     } else {
         big_matrix_mul_add(m_stride, p_stride,
-                             n_rows, m_dim, p_cols,
-                             a, b, c)
+                           n_rows, m_dim, p_cols,
+                           a, b, c)
     } 
 }
 
@@ -214,21 +214,10 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
                               a, b, c, &outer_matrix_mul_add);
 
         /* Finish adding remaining the products of A's columns by b's rows */
+        block_routine(m_stride, p_stride, MEGABLOCKROW, m_dim_rem, MEGABLOCKCOL,
+                      stripe, sub_blocks, col_pillars, a, b, c, &outer_matrix_mul_add);
+
         unsafe {
-            let a_idx = get_idx(stripe, sub_blocks, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-            
-            for pillar in (0 .. col_pillars).step_by(MEGABLOCKCOL) {
-                let b_idx = get_idx(sub_blocks, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                let c_idx = get_idx(stripe, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-                outer_matrix_mul_add(m_stride, p_stride,
-                                     MEGABLOCKROW, m_dim_rem, MEGABLOCKCOL,
-                                     a_chunk, b_rows, c_chunk);
-            }
-
             if p_cols_rem > 0 {
                 let c_idx = get_idx(stripe, col_pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
@@ -249,20 +238,9 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
     }
 
     if n_rows_rem > 0  {
-        unsafe {
-            let a_idx = get_idx(row_stripes, 0, m_stride);
-            let a_rows = a.offset(a_idx as isize);
-
-            let b_idx = get_idx(0, 0, p_stride);
-            let b_cols = b.offset(b_idx as isize);
-
-            let c_idx = get_idx(row_stripes, 0, p_stride);
-            let c_chunk = c.offset(c_idx as isize);
-
-            outer_matrix_mul_add(m_stride, p_stride,
-                                  n_rows_rem, m_dim, col_pillars,
-                                  a_rows, b_cols, c_chunk);
-        }
+        block_routine(m_stride, p_stride, n_rows_rem, m_dim, MEGABLOCKCOL,
+                      row_stripes, 0, col_pillars,
+                      a, b, c, &outer_matrix_mul_add);
     }
 
     if p_cols_rem > 0 {
@@ -297,21 +275,11 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
                               a, b, c, &middle_matrix_mul_add);
 
         /* Finish adding remaining the products of A's columns by b's rows */
+        block_routine(m_stride, p_stride, BLOCKROW, m_dim_rem, BLOCKCOL,
+                      stripe, sub_blocks, col_pillars,
+                      a, b, c, &middle_matrix_mul_add);
+
         unsafe {
-            let a_idx = get_idx(stripe, sub_blocks, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-            
-            for pillar in (0 .. col_pillars).step_by(BLOCKCOL) {
-                let b_idx = get_idx(sub_blocks, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                let c_idx = get_idx(stripe, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-                middle_matrix_mul_add(m_stride, p_stride,
-                                      BLOCKROW, m_dim_rem, BLOCKCOL,
-                                      a_chunk, b_rows, c_chunk);
-            }
-
             if p_cols_rem > 0 {
                 let c_idx = get_idx(stripe, col_pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
@@ -332,20 +300,9 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
     }
 
     if n_rows_rem > 0  {
-        unsafe {
-            let a_idx = get_idx(row_stripes, 0, m_stride);
-            let a_rows = a.offset(a_idx as isize);
-
-            let b_idx = get_idx(0, 0, p_stride);
-            let b_cols = b.offset(b_idx as isize);
-
-            let c_idx = get_idx(row_stripes, 0, p_stride);
-            let c_chunk = c.offset(c_idx as isize);
-
-            middle_matrix_mul_add(m_stride, p_stride,
-                                 n_rows_rem, m_dim, col_pillars,
-                                 a_rows, b_cols, c_chunk);
-        }
+        block_routine(m_stride, p_stride, n_rows_rem, m_dim, BLOCKCOL,
+                      row_stripes, 0, col_pillars,
+                      a, b, c, &middle_matrix_mul_add);
     }
 
     if p_cols_rem > 0 {
@@ -353,10 +310,9 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
             let c_idx = get_idx(row_stripes, col_pillars, p_stride);
             let c_chunk = c.offset(c_idx as isize);
 
-            col_rem_subroutine(m_stride, p_stride,
-                               n_rows_rem, m_dim, p_cols_rem,
-                               row_stripes, 0, col_pillars,
-                               a, b, c_chunk, &middle_matrix_mul_add);
+            col_rem_subroutine(m_stride, p_stride, n_rows_rem, m_dim, p_cols_rem,
+                               row_stripes, 0, col_pillars, a, b, c_chunk,
+                               &middle_matrix_mul_add);
         }
     }
 }
@@ -375,63 +331,37 @@ fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
 
     /* Calculate upper left corner of C */
     for stripe in (0 .. row_stripes).step_by(MINIBLOCKROW) {
-        upper_left_subroutine(m_stride, p_stride,
-                              MINIBLOCKROW, MINIBLOCKM, MINIBLOCKCOL,
-                              stripe, sub_blocks, col_pillars,
-                              a, b, c, &inner_matrix_mul_add);
+        upper_left_subroutine(m_stride, p_stride, MINIBLOCKROW, MINIBLOCKM, MINIBLOCKCOL,
+                              stripe, sub_blocks, col_pillars, a, b, c,
+                              &inner_matrix_mul_add);
 
         /* Finish adding remaining the products of A's columns by b's rows */
+        block_routine(m_stride, p_stride, MINIBLOCKROW, m_dim_rem, MINIBLOCKCOL,
+                      stripe, sub_blocks, col_pillars,
+                      a, b, c, &inner_matrix_mul_add);
+
         unsafe {
-            let a_idx = get_idx(stripe, sub_blocks, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-            
-            for pillar in (0 .. col_pillars).step_by(MINIBLOCKCOL) {
-                let b_idx = get_idx(sub_blocks, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                let c_idx = get_idx(stripe, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-                inner_matrix_mul_add(m_stride, p_stride,
-                                     MINIBLOCKROW, m_dim_rem, MINIBLOCKCOL,
-                                     a_chunk, b_rows, c_chunk);
-            }
-
             if p_cols_rem > 0 {
                 let c_idx = get_idx(stripe, col_pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
 
                 for block in (0 .. sub_blocks).step_by(MINIBLOCKM) {
-                    col_rem_subroutine(m_stride, p_stride,
-                                       MINIBLOCKROW, MINIBLOCKM, p_cols_rem,
-                                       stripe, block, col_pillars,
-                                       a, b, c_chunk, &inner_matrix_mul_add);
+                    col_rem_subroutine(m_stride, p_stride, MINIBLOCKROW, MINIBLOCKM, p_cols_rem,
+                                       stripe, block, col_pillars, a, b, c_chunk,
+                                       &inner_matrix_mul_add);
                 }
 
-                col_rem_subroutine(m_stride, p_stride,
-                                   MINIBLOCKROW, m_dim_rem, p_cols_rem,
-                                   stripe, sub_blocks, col_pillars,
-                                   a, b, c_chunk, &inner_matrix_mul_add);
+                col_rem_subroutine(m_stride, p_stride, MINIBLOCKROW, m_dim_rem, p_cols_rem,
+                                   stripe, sub_blocks, col_pillars, a, b, c_chunk,
+                                   &inner_matrix_mul_add);
             }
         }
     }
 
     if n_rows_rem > 0  {
-        unsafe {
-            let a_idx = get_idx(row_stripes, 0, m_stride);
-            let a_rows = a.offset(a_idx as isize);
-
-            for pillar in (0 .. col_pillars).step_by(MINIBLOCKCOL) {
-                let b_idx = get_idx(0, pillar, p_stride);
-                let b_cols = b.offset(b_idx as isize);
-
-                let c_idx = get_idx(row_stripes, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-
-                inner_matrix_mul_add(m_stride, p_stride,
-                                     n_rows_rem, m_dim, MINIBLOCKCOL,
-                                     a_rows, b_cols, c_chunk);
-            }
-        }
+        block_routine(m_stride, p_stride, n_rows_rem, m_dim, MINIBLOCKCOL,
+                      row_stripes, 0, col_pillars,
+                      a, b, c, &inner_matrix_mul_add);
     }
 
     if p_cols_rem > 0 {
@@ -439,8 +369,7 @@ fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
             let c_idx = get_idx(row_stripes, col_pillars, p_stride);
             let c_chunk = c.offset(c_idx as isize);
 
-            col_rem_subroutine(m_stride, p_stride,
-                               n_rows_rem, m_dim, p_cols_rem,
+            col_rem_subroutine(m_stride, p_stride, n_rows_rem, m_dim, p_cols_rem,
                                row_stripes, 0, col_pillars,
                                a, b, c_chunk, &inner_matrix_mul_add);
         }
@@ -555,22 +484,20 @@ fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
     }
 
     /* Calculate the last rows of C up to the right columns */
-    //if col_pillars != p_cols {
-    if row_stripes != n_rows {
-        unsafe {
-            let a_idx = get_idx(row_stripes, 0, m_stride);
-            let a_stripe = a.offset(a_idx as isize);
+    /* If n_rows_rem == 0, nothing will be done other than a function call */
+    unsafe {
+        let a_idx = get_idx(row_stripes, 0, m_stride);
+        let a_stripe = a.offset(a_idx as isize);
 
-            let b_idx = get_idx(0, col_pillars, p_stride);
-            let b_cols = b.offset(b_idx as isize);
-            
-            let c_idx = get_idx(row_stripes, col_pillars, p_stride);
-            let c_chunk = c.offset(c_idx as isize);
+        let b_idx = get_idx(0, col_pillars, p_stride);
+        let b_cols = b.offset(b_idx as isize);
+        
+        let c_idx = get_idx(row_stripes, col_pillars, p_stride);
+        let c_chunk = c.offset(c_idx as isize);
 
-            inner_small_matrix_mul_add(m_stride, p_stride,
-                                       n_rows_rem, m_dim, p_cols_rem,
-                                       a_stripe, b_cols, c_chunk);
-        }
+        inner_small_matrix_mul_add(m_stride, p_stride,
+                                   n_rows_rem, m_dim, p_cols_rem,
+                                   a_stripe, b_cols, c_chunk);
     }
 }
 
@@ -595,7 +522,7 @@ unsafe fn inner_small_matrix_mul_add(m_stride: usize, p_stride: usize,
         for k in 0 .. m_dim {
             let a_idx = get_idx(row, k, m_stride);
             let a_elt = a.offset(a_idx as isize);
-    
+            
             for column in 0 .. p_cols {
                 let b_idx = get_idx(k, column, p_stride);
                 let b_elt = b.offset(b_idx as isize);
@@ -612,24 +539,33 @@ fn upper_left_subroutine(m_stride: usize, p_stride: usize,
                          subrow_step: usize, block_step: usize, subcol_step: usize,
                          stripe: usize, blocks: usize, pillars: usize,
                          a: *const f64, b: *const f64, c: *mut f64,
-                         block_fn: &Fn(usize, usize,
-                                       usize, usize, usize,
+                         block_fn: &Fn(usize, usize, usize, usize, usize,
                                        *const f64, *const f64, *mut f64)) {
+    for block in (0 .. blocks).step_by(block_step) {
+        block_routine(m_stride, p_stride, subrow_step, block_step, subcol_step,
+                      stripe, block, pillars, a, b, c, block_fn);
+    }
+}
+
+fn block_routine(m_stride: usize, p_stride: usize,
+                 subrow_step: usize, block_rem: usize, subcol_step: usize,
+                 stripe: usize, block: usize, pillars: usize,
+                 a: *const f64, b: *const f64, c: *mut f64,
+                 block_fn: &Fn(usize, usize, usize, usize, usize,
+                               *const f64, *const f64, *mut f64)) {
     unsafe {
-        for block in (0 .. blocks).step_by(block_step) {
-            let a_idx = get_idx(stripe, block, m_stride);
-            let a_block = a.offset(a_idx as isize);
+        let a_idx = get_idx(stripe, block, m_stride);
+        let a_chunk = a.offset(a_idx as isize);
+        
+        for pillar in (0 .. pillars).step_by(subcol_step) {
+            let b_idx = get_idx(block, pillar, p_stride);
+            let b_rows = b.offset(b_idx as isize);
 
-            for pillar in (0 .. pillars).step_by(subcol_step) {
-                let b_idx = get_idx(block, pillar, p_stride);
-                let b_block = b.offset(b_idx as isize);
-
-                let c_idx = get_idx(stripe, pillar, p_stride);
-                let c_block = c.offset(c_idx as isize);
-                block_fn(m_stride, p_stride,
-                         subrow_step, block_step, subcol_step,
-                         a_block, b_block, c_block);
-            }
+            let c_idx = get_idx(stripe, pillar, p_stride);
+            let c_chunk = c.offset(c_idx as isize);
+            block_fn(m_stride, p_stride,
+                     subrow_step, block_rem, subcol_step,
+                     a_chunk, b_rows, c_chunk);
         }
     }
 }
@@ -638,8 +574,7 @@ fn col_rem_subroutine(m_stride: usize, p_stride: usize,
                       subrow_step: usize, block_step: usize, col_rem: usize,
                       stripe: usize, block: usize, pillars: usize,
                       a: *const f64, b: *const f64, c_chunk: *mut f64,
-                      block_fn: &Fn(usize, usize,
-                                    usize, usize, usize,
+                      block_fn: &Fn(usize, usize, usize, usize, usize,
                                     *const f64, *const f64, *mut f64)) {
     unsafe {
         let a_idx = get_idx(stripe, block, m_stride);
@@ -658,7 +593,7 @@ fn col_rem_subroutine(m_stride: usize, p_stride: usize,
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
 unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
-                            a: *const f64, b: *const f64, c: *mut f64) {
+                               a: *const f64, b: *const f64, c: *mut f64) {
     /* For 4x4 matrices, the first row of AB + C can be represented as:
      *
      * A11B11 + A12B21 + A13B31 + A14B41 + C11,
