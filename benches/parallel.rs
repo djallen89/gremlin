@@ -10,7 +10,7 @@ use ndarray::linalg::general_mat_mul;
 use criterion::{Benchmark, Criterion};
 
 fn bench_n_sq(crit: &mut Criterion, n: usize) {
-    let my_name = format!("my dgemm parallel {}sq", n);
+    let my_name = format!("{}sq", n);
     //let other_name = format!("ndarray {}sq", n);
     
     let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
@@ -37,7 +37,7 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
         //}))
         .sample_size(samples);
     
-    crit.bench("dgemm", bench_def);
+    crit.bench("dgemm_parallel", bench_def);
 }
 
 fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {

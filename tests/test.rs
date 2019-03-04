@@ -7,6 +7,11 @@ fn test_range(begin: usize, end: usize, func: &Fn(usize)) {
 }
 
 #[test]
+fn matrix_7x7_test() {
+    matrix_madd_n_sq(7);
+}
+
+#[test]
 fn matrix_4x4_test() {
     matrix_madd_n_sq(4);
 }

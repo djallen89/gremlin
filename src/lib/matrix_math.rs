@@ -215,10 +215,10 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
 
         /* Finish adding remaining the products of A's columns by b's rows */
         block_routine(m_stride, p_stride, MEGABLOCKROW, m_dim_rem, MEGABLOCKCOL,
-                      stripe, sub_blocks, col_pillars, a, b, c, &outer_matrix_mul_add);
+                      stripe, sub_blocks, col_pillars, a, b, c, &middle_matrix_mul_add);
 
-        unsafe {
-            if p_cols_rem > 0 {
+        if p_cols_rem > 0 {
+            unsafe {
                 let c_idx = get_idx(stripe, col_pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
 
@@ -226,21 +226,15 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
                     col_rem_subroutine(m_stride, p_stride,
                                        MEGABLOCKROW, MEGABLOCKM, p_cols_rem,
                                        stripe, block, col_pillars,
-                                       a, b, c_chunk, &outer_matrix_mul_add);
+                                       a, b, c_chunk, &middle_matrix_mul_add);
                 }
 
                 col_rem_subroutine(m_stride, p_stride,
                                    MEGABLOCKROW, m_dim_rem, p_cols_rem,
                                    stripe, sub_blocks, col_pillars,
-                                   a, b, c_chunk, &outer_matrix_mul_add);
+                                   a, b, c_chunk, &middle_matrix_mul_add);
             }
         }
-    }
-
-    if n_rows_rem > 0  {
-        block_routine(m_stride, p_stride, n_rows_rem, m_dim, MEGABLOCKCOL,
-                      row_stripes, 0, col_pillars,
-                      a, b, c, &outer_matrix_mul_add);
     }
 
     if p_cols_rem > 0 {
@@ -251,9 +245,16 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
             col_rem_subroutine(m_stride, p_stride,
                                n_rows_rem, m_dim, p_cols_rem,
                                row_stripes, 0, col_pillars,
-                               a, b, c_chunk, &outer_matrix_mul_add);
+                               a, b, c_chunk, &middle_matrix_mul_add);
         }
     }
+
+    if n_rows_rem > 0  {
+        block_routine(m_stride, p_stride, n_rows_rem, m_dim, MEGABLOCKCOL,
+                      row_stripes, 0, col_pillars,
+                      a, b, c, &middle_matrix_mul_add);
+    }
+
 }
 
 fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
@@ -277,10 +278,10 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
         /* Finish adding remaining the products of A's columns by b's rows */
         block_routine(m_stride, p_stride, BLOCKROW, m_dim_rem, BLOCKCOL,
                       stripe, sub_blocks, col_pillars,
-                      a, b, c, &middle_matrix_mul_add);
+                      a, b, c, &inner_matrix_mul_add);
 
-        unsafe {
-            if p_cols_rem > 0 {
+        if p_cols_rem > 0 {
+            unsafe {
                 let c_idx = get_idx(stripe, col_pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
 
@@ -288,21 +289,15 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
                     col_rem_subroutine(m_stride, p_stride,
                                        BLOCKROW, BLOCKM, p_cols_rem,
                                        stripe, block, col_pillars,
-                                       a, b, c_chunk, &middle_matrix_mul_add);
+                                       a, b, c_chunk, &inner_matrix_mul_add);
                 }
-
+                
                 col_rem_subroutine(m_stride, p_stride,
                                    BLOCKROW, m_dim_rem, p_cols_rem,
                                    stripe, sub_blocks, col_pillars,
-                                   a, b, c_chunk, &middle_matrix_mul_add);
+                                   a, b, c_chunk, &inner_matrix_mul_add);
             }
         }
-    }
-
-    if n_rows_rem > 0  {
-        block_routine(m_stride, p_stride, n_rows_rem, m_dim, BLOCKCOL,
-                      row_stripes, 0, col_pillars,
-                      a, b, c, &middle_matrix_mul_add);
     }
 
     if p_cols_rem > 0 {
@@ -312,9 +307,16 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
 
             col_rem_subroutine(m_stride, p_stride, n_rows_rem, m_dim, p_cols_rem,
                                row_stripes, 0, col_pillars, a, b, c_chunk,
-                               &middle_matrix_mul_add);
+                               &inner_matrix_mul_add);
         }
     }
+
+    if n_rows_rem > 0  {
+        block_routine(m_stride, p_stride, n_rows_rem, m_dim, BLOCKCOL,
+                      row_stripes, 0, col_pillars,
+                      a, b, c, &inner_matrix_mul_add);
+    }
+
 }
 
 fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
@@ -340,8 +342,11 @@ fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
                       stripe, sub_blocks, col_pillars,
                       a, b, c, &inner_matrix_mul_add);
 
+    }
+
+    if p_cols_rem > 0 {
         unsafe {
-            if p_cols_rem > 0 {
+            for stripe in (0 .. row_stripes).step_by(MINIBLOCKROW) {
                 let c_idx = get_idx(stripe, col_pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
 
@@ -355,6 +360,13 @@ fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
                                    stripe, sub_blocks, col_pillars, a, b, c_chunk,
                                    &inner_matrix_mul_add);
             }
+
+            let c_idx = get_idx(row_stripes, col_pillars, p_stride);
+            let c_chunk = c.offset(c_idx as isize);
+
+            col_rem_subroutine(m_stride, p_stride, n_rows_rem, m_dim, p_cols_rem,
+                               row_stripes, 0, col_pillars,
+                               a, b, c_chunk, &inner_matrix_mul_add);
         }
     }
 
@@ -364,16 +376,6 @@ fn middle_matrix_mul_add(m_stride: usize, p_stride: usize,
                       a, b, c, &inner_matrix_mul_add);
     }
 
-    if p_cols_rem > 0 {
-        unsafe {
-            let c_idx = get_idx(row_stripes, col_pillars, p_stride);
-            let c_chunk = c.offset(c_idx as isize);
-
-            col_rem_subroutine(m_stride, p_stride, n_rows_rem, m_dim, p_cols_rem,
-                               row_stripes, 0, col_pillars,
-                               a, b, c_chunk, &inner_matrix_mul_add);
-        }
-    }
 }
 
 fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
@@ -461,14 +463,128 @@ fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
         }
     }
 
+    for pillar in (0 .. col_pillars).step_by(4) {
+        for row in row_stripes .. n_rows {
+            for k in (0 .. sub_blocks).step_by(4) {
+                unsafe {
+                    let a_idx = get_idx(row, k, m_stride);
+                    
+                    let a1_elt = a.offset(a_idx as isize);
+                    let a2_elt = a.offset((a_idx + 1) as isize);
+                    let a3_elt = a.offset((a_idx + 2) as isize);
+                    let a4_elt = a.offset((a_idx + 3) as isize);
+
+                    let b11_idx = get_idx(k, pillar + 0, p_stride);
+                    let b12_idx = get_idx(k, pillar + 1, p_stride);
+                    let b13_idx = get_idx(k, pillar + 2, p_stride);
+                    let b14_idx = get_idx(k, pillar + 3, p_stride);
+                    let b21_idx = get_idx(k + 1, pillar + 0, p_stride);
+                    let b22_idx = get_idx(k + 1, pillar + 1, p_stride);
+                    let b23_idx = get_idx(k + 1, pillar + 2, p_stride);
+                    let b24_idx = get_idx(k + 1, pillar + 3, p_stride);
+
+                    let b11_elt = b.offset(b11_idx as isize);
+                    let b12_elt = b.offset(b12_idx as isize);
+                    let b13_elt = b.offset(b13_idx as isize);
+                    let b14_elt = b.offset(b14_idx as isize);
+                    let b21_elt = b.offset(b21_idx as isize);
+                    let b22_elt = b.offset(b22_idx as isize);
+                    let b23_elt = b.offset(b23_idx as isize);
+                    let b24_elt = b.offset(b24_idx as isize);
+
+                    let c11_idx = get_idx(row, pillar + 0, p_stride);
+                    let c11_elt = c.offset(c11_idx as isize);
+                    madd(a1_elt, b11_elt, c11_elt);
+
+                    let c12_idx = get_idx(row, pillar + 1, p_stride);
+                    let c12_elt = c.offset(c12_idx as isize);
+                    madd(a1_elt, b12_elt, c12_elt);
+                    
+                    let c13_idx = get_idx(row, pillar + 2, p_stride);                    
+                    let c13_elt = c.offset(c13_idx as isize);
+                    madd(a1_elt, b13_elt, c13_elt);
+
+                    let c14_idx = get_idx(row, pillar + 3, p_stride);                    
+                    let c14_elt = c.offset(c14_idx as isize);
+                    madd(a1_elt, b14_elt, c14_elt);
+
+                    let c21_idx = get_idx(row, pillar + 0, p_stride);
+                    let c21_elt = c.offset(c21_idx as isize);
+                    madd(a2_elt, b21_elt, c21_elt);
+
+                    let c22_idx = get_idx(row, pillar + 1, p_stride);
+                    let c22_elt = c.offset(c22_idx as isize);
+                    madd(a2_elt, b22_elt, c22_elt);
+
+                    let c23_idx = get_idx(row, pillar + 2, p_stride);                    
+                    let c23_elt = c.offset(c23_idx as isize);
+                    madd(a2_elt, b23_elt, c23_elt);
+
+                    let c24_idx = get_idx(row, pillar + 3, p_stride);                    
+                    let c24_elt = c.offset(c24_idx as isize);
+                    madd(a2_elt, b24_elt, c24_elt);
+
+                    let b31_idx = get_idx(k + 2, pillar + 0, p_stride);
+                    let b32_idx = get_idx(k + 2, pillar + 1, p_stride);
+                    let b33_idx = get_idx(k + 2, pillar + 2, p_stride);
+                    let b34_idx = get_idx(k + 2, pillar + 3, p_stride);
+                    let b41_idx = get_idx(k + 3, pillar + 0, p_stride);
+                    let b42_idx = get_idx(k + 3, pillar + 1, p_stride);
+                    let b43_idx = get_idx(k + 3, pillar + 2, p_stride);
+                    let b44_idx = get_idx(k + 3, pillar + 3, p_stride);
+                    
+                    let b31_elt = b.offset(b31_idx as isize);
+                    let b32_elt = b.offset(b32_idx as isize);                    
+                    let b33_elt = b.offset(b33_idx as isize);
+                    let b34_elt = b.offset(b34_idx as isize);
+                    let b41_elt = b.offset(b41_idx as isize);
+                    let b42_elt = b.offset(b42_idx as isize);
+                    let b43_elt = b.offset(b43_idx as isize);
+                    let b44_elt = b.offset(b44_idx as isize);
+
+                    let c31_idx = get_idx(row, pillar + 0, p_stride);
+                    let c31_elt = c.offset(c31_idx as isize);
+                    madd(a3_elt, b31_elt, c31_elt);
+
+                    let c32_idx = get_idx(row, pillar + 1, p_stride);
+                    let c32_elt = c.offset(c32_idx as isize);
+                    madd(a3_elt, b32_elt, c32_elt);
+
+                    let c33_idx = get_idx(row, pillar + 2, p_stride);
+                    let c33_elt = c.offset(c33_idx as isize);
+                    madd(a3_elt, b33_elt, c33_elt);
+
+                    let c34_idx = get_idx(row, pillar + 3, p_stride);
+                    let c34_elt = c.offset(c34_idx as isize);
+                    madd(a3_elt, b34_elt, c34_elt);
+                                       
+                    let c41_idx = get_idx(row, pillar + 0, p_stride);
+                    let c41_elt = c.offset(c41_idx as isize);
+                    madd(a4_elt, b41_elt, c41_elt);
+                    
+                    let c42_idx = get_idx(row, pillar + 1, p_stride);
+                    let c42_elt = c.offset(c42_idx as isize);
+                    madd(a4_elt, b42_elt, c42_elt);
+
+                    let c43_idx = get_idx(row, pillar + 2, p_stride);
+                    let c43_elt = c.offset(c43_idx as isize);
+                    madd(a4_elt, b43_elt, c43_elt);
+
+                    let c44_idx = get_idx(row, pillar + 3, p_stride);
+                    let c44_elt = c.offset(c44_idx as isize);
+                    madd(a4_elt, b44_elt, c44_elt);
+                }
+            }
+        }
+    }
+
     for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
-        for k in 0 .. m_dim {
+        for k in sub_blocks .. m_dim {
             unsafe {
                 let b_idx = get_idx(k, pillar, p_stride);
                 let b_row_vec = _mm256_loadu_pd(b.offset(b_idx as isize));
 
                 for row in row_stripes .. n_rows {
-
                     let c_idx = get_idx(row, pillar, p_stride);
                     let mut c_row_vec = _mm256_loadu_pd(c.offset(c_idx as isize));
 
