@@ -743,7 +743,7 @@ unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
 
     for row in 0 .. 4 {
         for column in 0 .. 4 {
-            let b_idx = get_idx(row, 0, p_stride);
+            let b_idx = get_idx(row, column, p_stride);
             b_arr[row * 4 + column] = *b.offset(b_idx as isize);
         }
     }
@@ -756,7 +756,8 @@ unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
             let a_idx = get_idx(row, column, 4);
             let a_elt = &a_arr[a_idx];
             let a_mult: __m256d = _mm256_broadcast_sd(a_elt);
-            let b_elt = b_arr.as_ptr().offset((column * 4) as isize);
+            //let b_elt = b_arr.as_ptr().offset((column * 4) as isize);
+            let b_elt = &(b_arr[column * 4]) as *const f64;
             let b_row: __m256d = _mm256_loadu_pd(b_elt);
             c_row = _mm256_fmadd_pd(a_mult, b_row, c_row);
         }

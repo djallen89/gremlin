@@ -10,24 +10,24 @@ use criterion::{Benchmark, Criterion};
 
 fn bench_n_sq(crit: &mut Criterion, n: usize) {
     let my_name = format!("my dgemm {}sq", n);
-    let other_name = format!("ndarray {}sq", n);
+    //let other_name = format!("ndarray {}sq", n);
     
     let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
     let b = random_array(n, n, -10000.0, 10000.0);
     let mut c = random_array(n, n, -10000.0, 10000.0);
 
-    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
-    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
-    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+    //let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
+    //let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
+    //let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
             matrix_madd(n, n, n, &a, &b, &mut c)
         }))
-        .with_function(other_name, move |bch| bch.iter(|| {
-            general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
-        }))
+        //.with_function(other_name, move |bch| bch.iter(|| {
+            //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
+        //}))
         .sample_size(10);
     
     crit.bench("dgemm", bench_def);
@@ -302,9 +302,9 @@ criterion_group!(hot_spots,
 /* Not including vectors */
 
 criterion_main!(
-    small_non4_matrices,
-    small_4x_matrices,
-    mid_4x_matrices,
+    //small_non4_matrices,
+    //small_4x_matrices,
+    //mid_4x_matrices,
     hot_spots,
     big_4x_matrices,
     very_big_matrices,
