@@ -495,34 +495,22 @@ fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
                     let c11_idx = get_idx(row, pillar + 0, p_stride);
                     let c11_elt = c.offset(c11_idx as isize);
                     madd(a1_elt, b11_elt, c11_elt);
+                    madd(a2_elt, b21_elt, c11_elt);
 
                     let c12_idx = get_idx(row, pillar + 1, p_stride);
                     let c12_elt = c.offset(c12_idx as isize);
                     madd(a1_elt, b12_elt, c12_elt);
+                    madd(a2_elt, b22_elt, c12_elt);
                     
-                    let c13_idx = get_idx(row, pillar + 2, p_stride);                    
+                    let c13_idx = get_idx(row, pillar + 2, p_stride);
                     let c13_elt = c.offset(c13_idx as isize);
                     madd(a1_elt, b13_elt, c13_elt);
-
+                    madd(a2_elt, b23_elt, c13_elt);
+                    
                     let c14_idx = get_idx(row, pillar + 3, p_stride);                    
                     let c14_elt = c.offset(c14_idx as isize);
                     madd(a1_elt, b14_elt, c14_elt);
-
-                    let c21_idx = get_idx(row, pillar + 0, p_stride);
-                    let c21_elt = c.offset(c21_idx as isize);
-                    madd(a2_elt, b21_elt, c21_elt);
-
-                    let c22_idx = get_idx(row, pillar + 1, p_stride);
-                    let c22_elt = c.offset(c22_idx as isize);
-                    madd(a2_elt, b22_elt, c22_elt);
-
-                    let c23_idx = get_idx(row, pillar + 2, p_stride);                    
-                    let c23_elt = c.offset(c23_idx as isize);
-                    madd(a2_elt, b23_elt, c23_elt);
-
-                    let c24_idx = get_idx(row, pillar + 3, p_stride);                    
-                    let c24_elt = c.offset(c24_idx as isize);
-                    madd(a2_elt, b24_elt, c24_elt);
+                    madd(a2_elt, b24_elt, c14_elt);
 
                     let b31_idx = get_idx(k + 2, pillar + 0, p_stride);
                     let b32_idx = get_idx(k + 2, pillar + 1, p_stride);
@@ -542,42 +530,54 @@ fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
                     let b43_elt = b.offset(b43_idx as isize);
                     let b44_elt = b.offset(b44_idx as isize);
 
-                    let c31_idx = get_idx(row, pillar + 0, p_stride);
-                    let c31_elt = c.offset(c31_idx as isize);
-                    madd(a3_elt, b31_elt, c31_elt);
-
-                    let c32_idx = get_idx(row, pillar + 1, p_stride);
-                    let c32_elt = c.offset(c32_idx as isize);
-                    madd(a3_elt, b32_elt, c32_elt);
-
-                    let c33_idx = get_idx(row, pillar + 2, p_stride);
-                    let c33_elt = c.offset(c33_idx as isize);
-                    madd(a3_elt, b33_elt, c33_elt);
-
-                    let c34_idx = get_idx(row, pillar + 3, p_stride);
-                    let c34_elt = c.offset(c34_idx as isize);
-                    madd(a3_elt, b34_elt, c34_elt);
-                                       
-                    let c41_idx = get_idx(row, pillar + 0, p_stride);
-                    let c41_elt = c.offset(c41_idx as isize);
-                    madd(a4_elt, b41_elt, c41_elt);
+                    madd(a3_elt, b31_elt, c11_elt);
+                    madd(a4_elt, b41_elt, c11_elt);
                     
-                    let c42_idx = get_idx(row, pillar + 1, p_stride);
-                    let c42_elt = c.offset(c42_idx as isize);
-                    madd(a4_elt, b42_elt, c42_elt);
-
-                    let c43_idx = get_idx(row, pillar + 2, p_stride);
-                    let c43_elt = c.offset(c43_idx as isize);
-                    madd(a4_elt, b43_elt, c43_elt);
-
-                    let c44_idx = get_idx(row, pillar + 3, p_stride);
-                    let c44_elt = c.offset(c44_idx as isize);
-                    madd(a4_elt, b44_elt, c44_elt);
+                    madd(a3_elt, b32_elt, c12_elt);
+                    madd(a4_elt, b42_elt, c12_elt);
+                    
+                    madd(a3_elt, b33_elt, c13_elt);
+                    madd(a4_elt, b43_elt, c13_elt);
+                    
+                    madd(a3_elt, b34_elt, c14_elt);
+                    madd(a4_elt, b44_elt, c14_elt);
                 }
             }
         }
     }
 
+    for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
+        for k in sub_blocks .. m_dim {
+            unsafe {
+                let b1_idx = get_idx(k, pillar, p_stride);
+                let b2_idx = get_idx(k, pillar + 1, p_stride);
+                let b3_idx = get_idx(k, pillar + 2, p_stride);
+                let b4_idx = get_idx(k, pillar + 3, p_stride);
+
+                let b1_elt = b.offset(b1_idx as isize);
+                let b2_elt = b.offset(b2_idx as isize);
+                let b3_elt = b.offset(b3_idx as isize);
+                let b4_elt = b.offset(b4_idx as isize);
+
+                for row in row_stripes .. n_rows {
+                    let c1_idx = get_idx(row, pillar, p_stride);
+                    let c2_idx = get_idx(row, pillar + 1, p_stride);
+                    let c3_idx = get_idx(row, pillar + 2, p_stride);
+                    let c4_idx = get_idx(row, pillar + 3, p_stride);
+
+                    let a_idx = get_idx(row, k, m_dim);
+                    let a_elt = a.offset(a_idx as isize);
+
+                    madd(a_elt, b1_elt, c.offset(c1_idx as isize));
+                    madd(a_elt, b2_elt, c.offset(c2_idx as isize));
+                    madd(a_elt, b3_elt, c.offset(c3_idx as isize));
+                    madd(a_elt, b4_elt, c.offset(c4_idx as isize));
+                }
+            }
+        }
+    }
+
+    /*
     for pillar in (0 .. col_pillars).step_by(MICROBLOCK) {
         for k in sub_blocks .. m_dim {
             unsafe {
@@ -598,6 +598,7 @@ fn inner_matrix_mul_add(m_stride: usize, p_stride: usize,
             }
         }
     }
+     */
 
     /* Calculate the last rows of C up to the right columns */
     /* If n_rows_rem == 0, nothing will be done other than a function call */
@@ -705,6 +706,7 @@ fn col_rem_subroutine(m_stride: usize, p_stride: usize,
     }
 }
 
+
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
@@ -730,7 +732,8 @@ unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
      */
 
     let mut a_arr: [f64; 16] = [0.0; 16];
-    let mut b_ptrs: [*const f64; 4] = [0 as *const f64; 4];
+    let mut b_arr: [f64; 16] = [0.0; 16];
+
     for row in 0 .. 4 {
         for column in 0 .. 4 {
             let a_idx = get_idx(row, column, m_stride);
@@ -739,8 +742,10 @@ unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
     }
 
     for row in 0 .. 4 {
-        let b_idx = get_idx(row, 0, p_stride);
-        b_ptrs[row] = b.offset(b_idx as isize);
+        for column in 0 .. 4 {
+            let b_idx = get_idx(row, 0, p_stride);
+            b_arr[row * 4 + column] = *b.offset(b_idx as isize);
+        }
     }
 
     for row in 0 .. 4 {
@@ -751,10 +756,78 @@ unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
             let a_idx = get_idx(row, column, 4);
             let a_elt = &a_arr[a_idx];
             let a_mult: __m256d = _mm256_broadcast_sd(a_elt);
-            let b_elt = b_ptrs[column];
+            let b_elt = b_arr.as_ptr().offset((column * 4) as isize);
             let b_row: __m256d = _mm256_loadu_pd(b_elt);
             c_row = _mm256_fmadd_pd(a_mult, b_row, c_row);
         }
         _mm256_storeu_pd(c_elt, c_row);
     }
 }
+
+/*
+unsafe fn minimatrix_fmadd_f64(m_stride: usize, p_stride: usize,
+                               a: *const f64, b: *const f64, c: *mut f64) {
+    /* For 4x4 matrices, the first row of AB + C can be represented as:
+     *
+     * A11B11 + A12B21 + A13B31 + A14B41 + C11,
+     * A11B12 + A12B22 + A13B32 + A14B42 + C12, 
+     * A11B13 + A12B23 + A13B33 + A14B43 + C13,
+     * A11B14 + A12B24 + A13B34 + A14B44 + C14
+     * 
+     * However, the products and summation can be reordered:
+     *
+     * A11B11 + C11 = C11, A11B12 + C12 = C12, A11B13 + C13 = C13, A11B14 + C14 = C14,
+     * A12B21 + C11 = C11, A12B22 + C12 = C12, A12B23 + C13 = C13, A12B24 + C14 = C14,
+     * A13B31 + C11 = C11, A13B32 + C12 = C12, A13B33 + C13 = C13, A13B34 + C14 = C14,
+     * A14B41 + C11 = C11, A14B42 + C12 = C12, A14B43 + C13 = C13, A14B44 + C14 = C14,
+     * 
+     * Generalizing this, one row (or 4 columns of one row) of C can be
+     * calculated in 4 iterations 
+     * row(C, i) = A[i][j]*row(B, j) + row(C, i)
+     */
+
+    let mut a_arr: [f64; 16] = [0.0; 16];
+    let mut b_arr: [f64; 16] = [0.0; 16];
+    for row in 0 .. 4 {
+        for column in 0 .. 4 {
+            let a_idx = get_idx(row, column, m_stride);
+            a_arr[row * 4 + column] = *a.offset(a_idx as isize);
+        }
+    }
+
+    for row in 0 .. 4 {
+        for column in 0 .. 4 {
+            let b_idx = get_idx(row, column, p_stride);
+            b_arr[row * 4 + column] = *b.offset(b_idx as isize);
+        }
+    }
+
+    for row in 0 .. 4 {
+        let c_idx = get_idx(row, 0, p_stride);
+        let mut c1 = *c.offset(c_idx as isize);
+        let mut c2 = *c.offset((c_idx + 1) as isize);
+        let mut c3 = *c.offset((c_idx + 2) as isize);
+        let mut c4 = *c.offset((c_idx + 3) as isize);
+        
+        for column in 0 .. 4 {
+            let b1 = b_arr[column * 4];
+            let b2 = b_arr[column * 4 + 1];
+            let b3 = b_arr[column * 4 + 2];
+            let b4 = b_arr[column * 4 + 3];
+
+            let a_idx = get_idx(row, column, 4);
+            let a_elt = a_arr[a_idx];
+
+            c1.fmadd(a_elt, b1);
+            c2.fmadd(a_elt, b2);
+            c3.fmadd(a_elt, b3);
+            c4.fmadd(a_elt, b4);
+        }
+        
+        *c.offset(c_idx as isize) = c1;
+        *c.offset((c_idx + 1) as isize) = c2;
+        *c.offset((c_idx + 2) as isize) = c3;
+        *c.offset((c_idx + 3) as isize) = c4;
+    }
+}
+*/
