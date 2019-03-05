@@ -26,8 +26,8 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
             matrix_madd(n, n, n, &a, &b, &mut c)
         }))
         //.with_function(other_name, move |bch| bch.iter(|| {
-            //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
-        //}))
+        //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
+//}))
         .sample_size(10);
     
     crit.bench("dgemm", bench_def);
@@ -297,18 +297,17 @@ criterion_group!(hot_spots,
                  bench_1024_sq,
                  bench_1025_sq, bench_1026_sq, bench_1028_sq);
 
-//criterion_main!(hot_spots);
+criterion_main!(hot_spots);
 
 /* Not including vectors */
-
+/*
 criterion_main!(
-    //small_non4_matrices,
-    //small_4x_matrices,
-    //mid_4x_matrices,
+    small_non4_matrices,
+    small_4x_matrices,
+    mid_4x_matrices,
     hot_spots,
     big_4x_matrices,
     very_big_matrices,
     huge_matrices,
     gigantic);
-
-
+*/

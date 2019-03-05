@@ -22,6 +22,26 @@ fn matrix_5x5_test() {
 }
 
 #[test]
+fn matrix_8x8_test() {
+    matrix_madd_n_sq(8);
+}
+
+#[test]
+fn matrix_8x9x8_test() {
+    matrix_madd_nmp(8,9,8);
+}
+
+#[test]
+fn matrix_8x10x8_test() {
+    matrix_madd_nmp(8,10,8);
+}
+
+#[test]
+fn matrix_8x11x8_test() {
+    matrix_madd_nmp(8,11,8);
+}
+
+#[test]
 fn matrix_1xn_test() {
     test_range(1, 512, &|n| { matrix_madd_nmp(1, n, 1) })
 }
@@ -44,6 +64,7 @@ fn matrix_40xmx2_test() {
 #[test]
 fn matrix_1to20_sq() {
     test_range(1, 20, &|n| {
+        println!("{}", n);
         matrix_madd_n_sq(n)
     })
 }
@@ -175,4 +196,5 @@ fn test_recurse_big_mp() {
 fn test_1492_1150_1201() {
     matrix_madd_nmp(1492, 1150, 1201)
 }
+
 
