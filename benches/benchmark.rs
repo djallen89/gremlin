@@ -297,10 +297,8 @@ criterion_group!(hot_spots,
                  bench_1024_sq,
                  bench_1025_sq, bench_1026_sq, bench_1028_sq);
 
-criterion_main!(hot_spots);
+//criterion_main!(hot_spots);
 
-/* Not including vectors */
-/*
 criterion_main!(
     small_non4_matrices,
     small_4x_matrices,
@@ -310,4 +308,4 @@ criterion_main!(
     very_big_matrices,
     huge_matrices,
     gigantic);
-*/
+
