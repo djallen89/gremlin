@@ -328,7 +328,6 @@ criterion_group!(hot_spots,
 //criterion_main!(hot_spots);
 
 criterion_main!(
-    small_non4_matrices,
     small_4x_matrices,
     mid_4x_matrices,
     hot_spots,
