@@ -17,17 +17,17 @@ const MINIBLOCKM: usize = MINIBLOCKCOL;
 //(/ (* 512 1024) 3 8 80) 273
 //(- (/ (* 512 1024) 3 8 80) (% (/ (* 512 1024) 3 8 80) 40)) 240
 //old was 80 and 256
-const BLOCKROW: usize = 80;
-const BLOCKCOL: usize = 240;
-const BLOCKM: usize = 240;
+const BLOCKROW: usize = 96;
+const BLOCKCOL: usize = 200;
+const BLOCKM: usize = 200;
 /* Megablocks should fit into L3 cache. 
 This should probably be parameterized since it varies much by architecture. */
 //(* 128 4) 512
 //(/ (* 8 1024 1024) 3 8 512) 682
 //(- (/ (* 8 1024 1024) 3 8 512) (% (/ (* 8 1024 1024) 3 8 512) 160)) 640
-const MEGABLOCKROW: usize = 480;
-const MEGABLOCKCOL: usize = 720;
-const MEGABLOCKM: usize = 480;
+const MEGABLOCKROW: usize = 384;
+const MEGABLOCKCOL: usize = 880;
+const MEGABLOCKM: usize = 880;
 
 macro_rules! row_grabber4 {
     ($arr:ident, $row:expr, $col:expr, $stride:expr) => {
@@ -254,7 +254,7 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
 
         /* Finish adding remaining the products of A's columns by b's rows */
         block_routine(m_stride, p_stride, MEGABLOCKROW, m_dim_rem, MEGABLOCKCOL,
-                      stripe, sub_blocks, col_pillars, a, b, c, &middle_matrix_mul_add);
+                      stripe, sub_blocks, col_pillars, a, b, c, &outer_matrix_mul_add);
 
         if p_cols_rem > 0 {
             unsafe {
@@ -265,13 +265,13 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
                     col_rem_subroutine(m_stride, p_stride,
                                        MEGABLOCKROW, MEGABLOCKM, p_cols_rem,
                                        stripe, block, col_pillars,
-                                       a, b, c_chunk, &middle_matrix_mul_add);
+                                       a, b, c_chunk, &outer_matrix_mul_add);
                 }
 
                 col_rem_subroutine(m_stride, p_stride,
                                    MEGABLOCKROW, m_dim_rem, p_cols_rem,
                                    stripe, sub_blocks, col_pillars,
-                                   a, b, c_chunk, &middle_matrix_mul_add);
+                                   a, b, c_chunk, &outer_matrix_mul_add);
             }
         }
     }
@@ -284,14 +284,14 @@ fn big_matrix_mul_add(m_stride: usize, p_stride: usize,
             col_rem_subroutine(m_stride, p_stride,
                                n_rows_rem, m_dim, p_cols_rem,
                                row_stripes, 0, col_pillars,
-                               a, b, c_chunk, &middle_matrix_mul_add);
+                               a, b, c_chunk, &outer_matrix_mul_add);
         }
     }
 
     if n_rows_rem > 0  {
         block_routine(m_stride, p_stride, n_rows_rem, m_dim, MEGABLOCKCOL,
                       row_stripes, 0, col_pillars,
-                      a, b, c, &middle_matrix_mul_add);
+                      a, b, c, &outer_matrix_mul_add);
     }
 
 }
@@ -317,7 +317,7 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
         /* Finish adding remaining the products of A's columns by b's rows */
         block_routine(m_stride, p_stride, BLOCKROW, m_dim_rem, BLOCKCOL,
                       stripe, sub_blocks, col_pillars,
-                      a, b, c, &inner_matrix_mul_add);
+                      a, b, c, &middle_matrix_mul_add);
 
         if p_cols_rem > 0 {
             unsafe {
@@ -328,7 +328,7 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
                     col_rem_subroutine(m_stride, p_stride,
                                        BLOCKROW, BLOCKM, p_cols_rem,
                                        stripe, block, col_pillars,
-                                       a, b, c_chunk, &inner_matrix_mul_add);
+                                       a, b, c_chunk, &middle_matrix_mul_add);
                 }
                 
                 col_rem_subroutine(m_stride, p_stride,
@@ -346,14 +346,14 @@ fn outer_matrix_mul_add(m_stride: usize, p_stride: usize,
 
             col_rem_subroutine(m_stride, p_stride, n_rows_rem, m_dim, p_cols_rem,
                                row_stripes, 0, col_pillars, a, b, c_chunk,
-                               &inner_matrix_mul_add);
+                               &middle_matrix_mul_add);
         }
     }
 
     if n_rows_rem > 0  {
         block_routine(m_stride, p_stride, n_rows_rem, m_dim, BLOCKCOL,
                       row_stripes, 0, col_pillars,
-                      a, b, c, &inner_matrix_mul_add);
+                      a, b, c, &middle_matrix_mul_add);
     }
 
 }
