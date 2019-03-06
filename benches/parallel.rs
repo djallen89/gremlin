@@ -84,7 +84,7 @@ bench_num_sq!(bench_80_sq);
 bench_num_sq!(bench_96_sq);
 bench_num_sq!(bench_100_sq);
 bench_num_sq!(bench_124_sq);
-criterion_group!(small_4x_matrices
+criterion_group!(small_4x_matrices,
                  bench_60_sq, bench_64_sq, bench_68_sq, bench_80_sq,
                  bench_96_sq, bench_100_sq, bench_124_sq);
 
