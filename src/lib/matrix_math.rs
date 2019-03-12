@@ -610,46 +610,11 @@ fn inner_matrix_mul_add(m_stride: Stride, p_stride: Stride,
 
             for row in stripes .. n_rows {
                 unsafe {
-                    let (a1, a2, a3, a4) = match row_grabber4!(a, row, k, m_stride) {
-                        (n, m, p, q) => (*n, *m, *p, *q)
+                    let a_arr = match row_grabber4!(a, row, k, m_stride) {
+                        (n, m, p, q) => [*n, *m, *p, *q]
                     };
-                    let mut a_mult = _mm256_broadcast_sd(&a1);
-
-                    let c11_idx = get_idx(row, pillar + 0, p_stride);
-                    let c11 = c.offset(c11_idx as isize);
-                    let mut c1_row_vec = _mm256_loadu_pd(c11);
-
-                    let c15_idx = get_idx(row, pillar + 4, p_stride);
-                    let c15 = c.offset(c15_idx as isize);
-                    let mut c2_row_vec = _mm256_loadu_pd(c15);
-
-                    let mut b1_row_vec = _mm256_loadu_pd(b_ptr);
-                    let mut b2_row_vec = _mm256_loadu_pd(b_ptr.offset(4));
-
-                    c1_row_vec = _mm256_fmadd_pd(a_mult, b1_row_vec, c1_row_vec);
-                    c2_row_vec = _mm256_fmadd_pd(a_mult, b2_row_vec, c2_row_vec);
-
-                    a_mult = _mm256_broadcast_sd(&a2);
-                    b1_row_vec = _mm256_loadu_pd(b_ptr.offset(8));
-                    b2_row_vec = _mm256_loadu_pd(b_ptr.offset(12));
-                    c1_row_vec = _mm256_fmadd_pd(a_mult, b1_row_vec, c1_row_vec);
-                    c2_row_vec = _mm256_fmadd_pd(a_mult, b2_row_vec, c2_row_vec);
-
-                    a_mult = _mm256_broadcast_sd(&a3);
-                    b1_row_vec = _mm256_loadu_pd(b_ptr.offset(16));
-                    b2_row_vec = _mm256_loadu_pd(b_ptr.offset(20));
-                    c1_row_vec = _mm256_fmadd_pd(a_mult, b1_row_vec, c1_row_vec);
-                    c2_row_vec = _mm256_fmadd_pd(a_mult, b2_row_vec, c2_row_vec);
-
-                    a_mult = _mm256_broadcast_sd(&a4);
-
-                    b1_row_vec = _mm256_loadu_pd(b_ptr.offset(24));
-                    b2_row_vec = _mm256_loadu_pd(b_ptr.offset(28));
-                    c1_row_vec = _mm256_fmadd_pd(a_mult, b1_row_vec, c1_row_vec);
-                    c2_row_vec = _mm256_fmadd_pd(a_mult, b2_row_vec, c2_row_vec);
-
-                    _mm256_storeu_pd(c11, c1_row_vec);
-                    _mm256_storeu_pd(c15, c2_row_vec);
+                    column_cache_kernel(p_stride, row, pillar,
+                                        &a_arr, b_ptr, c);
                 }
             }
         }
@@ -824,66 +789,26 @@ unsafe fn inner_middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                                       a: ConstPtr, b: ConstPtr, c: MutPtr) {
     let m_dim_rem = m_dim % MICROBLOCKM;
     let blocks = m_dim - m_dim_rem;
-    let p_cols_rem = p_cols % 8;
+    let p_cols_rem = p_cols % CACHELINE;
     let pillars = p_cols - p_cols_rem;
 
     for row in 0 .. n_rows {
         for k in (0 .. blocks).step_by(MICROBLOCKM) {
-            let a_elt = *a.offset(get_idx(row, k, m_stride) as isize);
-            let a2 = *a.offset(get_idx(row, k + 1, m_stride) as isize);
-            let a3 = *a.offset(get_idx(row, k + 2, m_stride) as isize);
-            let a4 = *a.offset(get_idx(row, k + 3, m_stride) as isize);
+            let a_arr = [*a.offset(get_idx(row, k, m_stride) as isize),
+                         *a.offset(get_idx(row, k + 1, m_stride) as isize),
+                         *a.offset(get_idx(row, k + 2, m_stride) as isize),
+                         *a.offset(get_idx(row, k + 3, m_stride) as isize)];
 
-            for column in (0 .. pillars).step_by(8) {
-                let mut b_arr = [0.0; 32];
-                for kb in 0 .. 4 {
-                    for col in 0 .. 8 {
-                        let b_idx = get_idx(kb + k, column + col, p_stride);
-                        b_arr[kb * 8 + col] = *b.offset(b_idx as isize);
+            for pillar in (0 .. pillars).step_by(CACHELINE) {
+                let mut b_arr = [0.0; MICROBLOCKM * CACHELINE];
+                for kb in 0 .. MICROBLOCKM {
+                    for col in 0 .. CACHELINE {
+                        let b_idx = get_idx(kb + k, pillar + col, p_stride);
+                        b_arr[kb * CACHELINE + col] = *b.offset(b_idx as isize);
                     }
                 }
                 let b_ptr = b_arr.as_ptr();
-
-                let mut a_mult = _mm256_broadcast_sd(&a_elt);
-
-                let c1_idx = get_idx(row, column, p_stride);
-                let c1_elt = c.offset(c1_idx as isize);
-                let mut c_row1 = _mm256_loadu_pd(c1_elt);
-
-                let c2_idx = get_idx(row, column + 4, p_stride);
-                let c2_elt = c.offset(c2_idx as isize);
-                let mut c_row2 = _mm256_loadu_pd(c2_elt);
-
-                let mut b_row1 = _mm256_loadu_pd(b_ptr);
-                let mut b_row2 = _mm256_loadu_pd(b_ptr.offset(4));
-
-                c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
-                c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
-
-                a_mult = _mm256_broadcast_sd(&a2);
-
-                b_row1 = _mm256_loadu_pd(b_ptr.offset(8));
-                c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
-                b_row2 = _mm256_loadu_pd(b_ptr.offset(12));
-                c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
-
-                a_mult = _mm256_broadcast_sd(&a3);
-                b_row1 = _mm256_loadu_pd(b_ptr.offset(16));
-                c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
-
-                b_row2 = _mm256_loadu_pd(b_ptr.offset(20));
-                c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
-
-                a_mult = _mm256_broadcast_sd(&a4);
-
-                b_row1 = _mm256_loadu_pd(b_ptr.offset(24));
-                b_row2 = _mm256_loadu_pd(b_ptr.offset(28));
-
-                c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
-                c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
-
-                _mm256_storeu_pd(c1_elt, c_row1);
-                _mm256_storeu_pd(c2_elt, c_row2);
+                column_cache_kernel(p_stride, row, pillar, &a_arr, b_ptr, c);
             }
 
             for column in pillars .. p_cols {
@@ -891,19 +816,19 @@ unsafe fn inner_middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                 let b_elt = *b.offset(b_idx as isize);
                 let c_idx = get_idx(row, column, p_stride);
                 let mut c_elt = 0.0;
-                c_elt.fmadd(a_elt, b_elt);
+                c_elt.fmadd(a_arr[0], b_elt);
 
                 let b_idx = get_idx(k + 1, column, p_stride);
                 let b_elt = *b.offset(b_idx as isize);
-                c_elt.fmadd(a2, b_elt);
+                c_elt.fmadd(a_arr[1], b_elt);
 
                 let b_idx = get_idx(k + 2, column, p_stride);
                 let b_elt = *b.offset(b_idx as isize);
-                c_elt.fmadd(a3, b_elt);
+                c_elt.fmadd(a_arr[2], b_elt);
 
                 let b_idx = get_idx(k + 3, column, p_stride);
                 let b_elt = *b.offset(b_idx as isize);
-                c_elt.fmadd(a4, b_elt);
+                c_elt.fmadd(a_arr[3], b_elt);
 
                 *c.offset(c_idx as isize) += c_elt;
             }
@@ -936,6 +861,7 @@ unsafe fn inner_middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
     }
 }
 
+#[inline(always)]
 fn upper_kernel(m_stride: Stride, p_stride: Stride,
                 row_block: Dim, m_block: Dim, col_block: Dim,
                 stripes: Dim, blocks: Dim, pillars: Dim,
@@ -1011,6 +937,55 @@ fn col_rem_kernel(m_stride: Stride, p_stride: Stride,
                  subrow_step, block_step, col_rem,
                  a_rows, b_cols, c_chunk);
     }
+}
+
+#[target_feature(enable = "avx2")]
+#[cfg(any(target_arch = "x86_64"))]
+unsafe fn column_cache_kernel(p_stride: Stride,
+                              row: Dim, pillar: Dim,
+                              a_arr: &[f64], b_ptr: ConstPtr, c: MutPtr) {
+    let mut a_mult = _mm256_broadcast_sd(&a_arr[0]);
+
+    let c1_idx = get_idx(row, pillar, p_stride);
+    let c1_elt = c.offset(c1_idx as isize);
+    let mut c_row1 = _mm256_loadu_pd(c1_elt);
+
+    let c2_idx = get_idx(row, pillar + 4, p_stride);
+    let c2_elt = c.offset(c2_idx as isize);
+    let mut c_row2 = _mm256_loadu_pd(c2_elt);
+
+    let mut b_row1 = _mm256_loadu_pd(b_ptr);
+    let mut b_row2 = _mm256_loadu_pd(b_ptr.offset(4));
+
+    c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
+    c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
+
+    a_mult = _mm256_broadcast_sd(&a_arr[1]);
+
+    b_row1 = _mm256_loadu_pd(b_ptr.offset(8));
+    c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
+    
+    b_row2 = _mm256_loadu_pd(b_ptr.offset(12));
+    c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
+
+    a_mult = _mm256_broadcast_sd(&a_arr[2]);
+    
+    b_row1 = _mm256_loadu_pd(b_ptr.offset(16));
+    c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
+
+    b_row2 = _mm256_loadu_pd(b_ptr.offset(20));
+    c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
+
+    a_mult = _mm256_broadcast_sd(&a_arr[3]);
+
+    b_row1 = _mm256_loadu_pd(b_ptr.offset(24));
+    b_row2 = _mm256_loadu_pd(b_ptr.offset(28));
+
+    c_row1 = _mm256_fmadd_pd(a_mult, b_row1, c_row1);
+    c_row2 = _mm256_fmadd_pd(a_mult, b_row2, c_row2);
+
+    _mm256_storeu_pd(c1_elt, c_row1);
+    _mm256_storeu_pd(c2_elt, c_row2);
 }
 
 /// Calculates C = AB + C for a 4x4 submatrix with AVX2 instructions.
