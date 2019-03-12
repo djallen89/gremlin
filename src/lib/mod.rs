@@ -16,6 +16,7 @@ use matrix_math::{single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
 use matrix_math::scalar_vector_fmadd;
 use rayon::prelude::*;
 use danger_math::Ptr;
+use std::cmp::{min, max};
 
 /// Calculates C <= AB + C, where A is a matrix of n rows by m columns,
 /// B is a matrix of m rows by p columns, and C is a matrix of n rows
@@ -56,7 +57,7 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
 /// of n rows by p columns. Attempts to use as many threads as there
 /// are physical CPU cores on the system.
 pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
-                            a: &[f64], b: &[f64], c: &mut [f64]) {
+                            a: &[f64], b: &[f64], c: &mut [f64]) {     
     if n_rows * m_dim * p_cols <= 8000 {
         return matrix_madd(n_rows, m_dim, p_cols, a, b, c);
     }
@@ -146,13 +147,26 @@ unsafe fn multithreaded(threads: usize, m_stride: usize, p_stride: usize,
         return matrix_mul_add(m_stride, p_stride,
                               n_rows, m_dim, p_cols,
                               a, b, c)
-    } 
+    }
 
-    let args_vec = param_gather(threads, m_stride, p_stride,
+    const MINSIZE: usize = 128;
+    //(/ (* 572 572 8 3) 1024.0 1024) 7.4886474609375
+    const MAXSIZE: usize = 572;
+    let biggest = max(n_rows, p_cols) / threads;
+    // we don't want to divvy up the work too much
+    let min_size = max(MINSIZE, biggest);
+    // likewise we don't want to take on too much with each thread
+    let max_size = min(MAXSIZE, biggest);
+    let size = if max_size == MAXSIZE {
+        max_size
+    } else {
+        min_size
+    };
+    
+    let args_vec = param_gather(size, m_stride, p_stride,
                                 n_rows, m_dim, p_cols,
                                 a, b, c);
 
-    assert!(args_vec.len() == threads);
     args_vec.par_iter().for_each(|(rows, m, cols, a_ptr, b_ptr, c_ptr)| {
         let ap = a_ptr.as_ptr();
         let bp = b_ptr.as_ptr();
@@ -162,20 +176,18 @@ unsafe fn multithreaded(threads: usize, m_stride: usize, p_stride: usize,
     });
 }
 
-unsafe fn param_gather(threads: usize, m_stride: usize, p_stride: usize,
+unsafe fn param_gather(min_size: usize, m_stride: usize, p_stride: usize,
                        n_rows: usize, m_dim: usize, p_cols: usize,
                        a: *const f64, b: *const f64, c: *mut f64) -> Vec<MaddParams> {
-    if threads == 1 {
+    let mut args_vec: Vec<MaddParams> = Vec::new();
+    let biggest = max(n_rows, p_cols);
+
+    if biggest < min_size {
         return vec!((n_rows, m_dim, p_cols,
                      Ptr::from_ptr(a), Ptr::from_ptr(b), Ptr::from_ptr(c)))
     }
-    
-    /* threads > 1 */
-    let new_threads = threads / 2;
-    let rem_threads = threads - new_threads;
-
-    let mut args_vec = Vec::new();
-    if n_rows >= p_cols {
+     
+    if biggest == n_rows {
         let first_rows = n_rows / 2;
         let last_rows = n_rows - first_rows;
         
@@ -184,10 +196,10 @@ unsafe fn param_gather(threads: usize, m_stride: usize, p_stride: usize,
         let c1 = c;
         let c2 = c.offset((first_rows * p_stride) as isize);
 
-        let mut args1 = param_gather(new_threads, m_stride, p_stride,
+        let mut args1 = param_gather(min_size, m_stride, p_stride,
                                      first_rows, m_dim, p_cols,
                                      a1, b, c1);
-        let mut args2 = param_gather(rem_threads, m_stride, p_stride,
+        let mut args2 = param_gather(min_size, m_stride, p_stride,
                                      last_rows, m_dim, p_cols,
                                      a2, b, c2);
 
@@ -203,16 +215,16 @@ unsafe fn param_gather(threads: usize, m_stride: usize, p_stride: usize,
         let c1 = c;
         let c2 = c.offset(first_cols as isize);
 
-        let mut args1 = param_gather(new_threads, m_stride, p_stride,
+        let mut args1 = param_gather(min_size, m_stride, p_stride,
                                      n_rows, m_dim, first_cols,
                                      a, b1, c1);
-        let mut args2 = param_gather(new_threads, m_stride, p_stride,
+        let mut args2 = param_gather(min_size, m_stride, p_stride,
                                      n_rows, m_dim, last_cols,
                                      a, b2, c2);
 
         args_vec.append(&mut args1);
         args_vec.append(&mut args2);
     }
-    
+
     return args_vec;
 }
