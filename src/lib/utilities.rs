@@ -187,3 +187,21 @@ pub fn check_dimensionality(n_rows: usize, m_dim: usize, p_cols: usize,
         Ok(())
     }
 }
+
+type Remainder = (usize, usize, usize);
+pub fn remainders(rows: usize, cols: usize, m_dim: usize,
+                  row_block: usize, col_block: usize, m_block: usize) -> Remainder {
+    let row_rem = rows % row_block;
+    let col_rem = cols % col_block;
+    let m_rem = m_dim % m_block;
+    (row_rem, col_rem, m_rem)
+}
+
+type Delimiter = (usize, usize, usize);
+pub fn delimiters(rows: usize, cols: usize, m_dim: usize,
+                  row_rem: usize, col_rem: usize, m_rem: usize) -> Delimiter {
+    let stripes = rows - row_rem;
+    let pillars = cols - col_rem;
+    let blocks = m_dim - m_rem;
+    (stripes, pillars, blocks)
+}
