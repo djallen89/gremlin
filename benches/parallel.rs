@@ -1,8 +1,9 @@
 #[macro_use]
 extern crate criterion;
 extern crate num_cpus;
-use gremlin_lib;
+extern crate ndarray;
 
+use gremlin_lib;
 use gremlin_lib::{random_array, matrix_madd_parallel};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
@@ -275,13 +276,13 @@ bench_num_sq!(bench_770_sq);
 bench_num_sq!(bench_772_sq);
 
 criterion_group!(hot_spots,
-                 //bench_124_sq, bench_126_sq, bench_127_sq,
-                 //bench_128_sq,
-                 //bench_129_sq, bench_130_sq, bench_132_sq,
+                 bench_124_sq, bench_126_sq, bench_127_sq,
+                 bench_128_sq,
+                 bench_129_sq, bench_130_sq, bench_132_sq,
                  
-                 //bench_252_sq, bench_254_sq, bench_255_sq,
+                 bench_252_sq, bench_254_sq, bench_255_sq,
                  bench_256_sq,
-                 //bench_257_sq, bench_258_sq, bench_260_sq,
+                 bench_257_sq, bench_258_sq, bench_260_sq,
                  
                  bench_508_sq,
                  bench_510_sq, bench_511_sq,
@@ -325,7 +326,33 @@ criterion_group!(hot_spots,
                  bench_4096_sq,
                  bench_4160_sq);
 
-criterion_main!(hot_spots);
+//criterion_main!(hot_spots);
+bench_num_sq!(bench_10496_sq);
+criterion_group!(omega,
+                 bench_4032_sq,
+                 bench_4096_sq,
+                 bench_4160_sq,
+                 bench_4256_sq,
+                 bench_4448_sq,
+                 bench_4544_sq,
+                 bench_4608_sq,
+                 bench_4744_sq,
+                 bench_4936_sq,
+                 bench_4992_sq,
+                 bench_5120_sq,
+                 bench_5248_sq,
+                 bench_10496_sq,
+);
+criterion_main!(omega);
+/*
+(/ 19111600057.906113 1e9) 19.111600057906113
+(/ 1153.9 55) 20.98
+(* (/ 19.1116 20.98) 100) 91.09437559580552
+(/ 64.147 55) 1.166309090909091
+(/ 88.909 55) 1.6165272727272728
+(/ 70.967 55) 1.2903090909090909
+ */
+
 /*
 criterion_main!(
     small_4x_matrices,

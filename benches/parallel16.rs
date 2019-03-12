@@ -1,8 +1,9 @@
 #[macro_use]
 extern crate criterion;
+extern crate num_cpus;
 use gremlin_lib;
 
-use gremlin_lib::{random_array, matrix_madd};
+use gremlin_lib::{random_array, matrix_madd_parallel};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 
@@ -19,24 +20,30 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
     //let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
     //let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
     //let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+    let threads = num_cpus::get_physical();
+    let samples = if n < 1200 {
+        20
+    } else {
+        10
+    };
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd(n, n, n, &a, &b, &mut c)
+            matrix_madd_parallel(threads, n, n, n, &a, &b, &mut c)
         }))
         //.with_function(other_name, move |bch| bch.iter(|| {
             //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
         //}))
-        .sample_size(10);
+        .sample_size(samples);
     
-    crit.bench("final_dgemm_serial", bench_def);
+    crit.bench("final_dgemm_parallel", bench_def);
 }
 
 fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     
-    let my_name = format!("my dgemm {}x{}x{}", n, m, p);
-    let other_name = format!("ndarray {}x{}x{}", n, m, p);
+    let my_name = format!("my dgemm parallel {}x{}x{}", n, m, p);
+    let other_name = format!("ndarray parallel {}x{}x{}", n, m, p);
 
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(m, p, -100.0, 100.0);
@@ -45,10 +52,12 @@ fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
     let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
     let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
+
+    let threads = num_cpus::get_physical();
     
     let bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd(n, m, p, &a, &b, &mut c);
+            matrix_madd_parallel(threads, n, m, p, &a, &b, &mut c);
         }))
         .with_function(other_name, move |bch| bch.iter(|| {
             general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
@@ -67,45 +76,6 @@ macro_rules! bench_num_sq {
         }
     }
 }
-
-bench_num_sq!(bench_4_sq);
-bench_num_sq!(bench_12_sq);
-bench_num_sq!(bench_16_sq);
-bench_num_sq!(bench_20_sq);
-bench_num_sq!(bench_28_sq);
-bench_num_sq!(bench_32_sq);
-bench_num_sq!(bench_36_sq);
-bench_num_sq!(bench_40_sq);
-bench_num_sq!(bench_44_sq);
-bench_num_sq!(bench_52_sq);
-bench_num_sq!(bench_56_sq);
-criterion_group!(tiny_4x_matrices,
-                 bench_4_sq,
-                 bench_12_sq,
-                 bench_16_sq,
-                 bench_20_sq,
-                 bench_28_sq,
-                 bench_32_sq,
-                 bench_36_sq,
-                 bench_40_sq,
-                 bench_44_sq,
-                 bench_52_sq,
-                 bench_56_sq);
-
-bench_num_sq!(bench_27_sq);
-bench_num_sq!(bench_29_sq);
-bench_num_sq!(bench_30_sq);
-bench_num_sq!(bench_31_sq);
-bench_num_sq!(bench_33_sq);
-bench_num_sq!(bench_34_sq);
-bench_num_sq!(bench_35_sq);
-bench_num_sq!(bench_62_sq);
-bench_num_sq!(bench_63_sq);
-bench_num_sq!(bench_65_sq);
-bench_num_sq!(bench_66_sq);
-criterion_group!(small_non4_matrices, bench_27_sq, bench_29_sq, bench_30_sq,
-                 bench_31_sq, bench_33_sq, bench_34_sq, bench_35_sq,
-                 bench_62_sq, bench_63_sq, bench_65_sq, bench_66_sq);
 
 bench_num_sq!(bench_60_sq);
 bench_num_sq!(bench_64_sq);
@@ -243,20 +213,6 @@ criterion_group!(huge_matrices,
                  bench_2720_sq,
                  bench_2912_sq);
 
-fn bench_2048x1(crit: &mut Criterion) {
-    bench_nmp(1, 2048, 1, crit);
-}
-
-fn bench_1_1_2048(crit: &mut Criterion) {
-    let n = 1;
-    let m = 1;
-    let p = 1024;
-    
-    bench_nmp(n, m, p, crit);
-}
-
-criterion_group!(vectors, bench_2048x1, bench_1_1_2048);
-
 bench_num_sq!(bench_3040_sq);
 bench_num_sq!(bench_3072_sq);
 bench_num_sq!(bench_3104_sq);
@@ -273,9 +229,7 @@ bench_num_sq!(bench_4256_sq);
 bench_num_sq!(bench_4448_sq);
 bench_num_sq!(bench_4544_sq);
 bench_num_sq!(bench_4608_sq);
-bench_num_sq!(bench_4744_sq);
-bench_num_sq!(bench_4936_sq);
-bench_num_sq!(bench_4992_sq);
+bench_num_sq!(bench_4864_sq);
 bench_num_sq!(bench_5120_sq);
 bench_num_sq!(bench_5248_sq);
 criterion_group!(gigantic,
@@ -295,12 +249,10 @@ criterion_group!(gigantic,
                  bench_4448_sq,
                  bench_4544_sq,
                  bench_4608_sq,
-                 bench_4744_sq,
-                 bench_4936_sq,
-                 bench_4992_sq,
+                 bench_4864_sq,
                  bench_5120_sq,
                  bench_5248_sq);
-                 
+
 bench_num_sq!(bench_252_sq);
 bench_num_sq!(bench_254_sq);
 bench_num_sq!(bench_255_sq);
@@ -319,39 +271,32 @@ bench_num_sq!(bench_770_sq);
 bench_num_sq!(bench_772_sq);
 
 criterion_group!(hot_spots,
-                 //bench_124_sq,
-                 //bench_126_sq, bench_127_sq,
-                 //bench_128_sq,
-                 //bench_129_sq, bench_130_sq,
-                 //bench_132_sq,
+                 bench_124_sq, bench_126_sq, bench_127_sq,
+                 bench_128_sq,
+                 bench_129_sq, bench_130_sq, bench_132_sq,
                  
-                 bench_252_sq,
-                 //bench_254_sq, bench_255_sq,
+                 bench_252_sq, bench_254_sq, bench_255_sq,
                  bench_256_sq,
-                 //bench_257_sq, bench_258_sq,
-                 bench_260_sq,
+                 bench_257_sq, bench_258_sq, bench_260_sq,
                  
                  bench_508_sq,
-                 bench_510_sq,
-                 //bench_511_sq,
+                 bench_510_sq, bench_511_sq,
                  bench_512_sq,
-                 //bench_513_sq,
-                 bench_514_sq,
+                 bench_513_sq, bench_514_sq,
                  bench_516_sq,
 
                  bench_764_sq,
                  bench_766_sq, bench_767_sq,
                  bench_768_sq,
                  bench_769_sq, bench_770_sq,
-                 bench_772_sq,//);
+                 bench_772_sq,
                  
                  bench_1020_sq,
                  bench_1022_sq, bench_1023_sq,
                  bench_1024_sq,
                  bench_1025_sq, bench_1026_sq,
                  bench_1028_sq,
-                 );
-/*
+
                  bench_1504_sq,
                  bench_1536_sq,
                  bench_1568_sq,
@@ -375,9 +320,9 @@ criterion_group!(hot_spots,
                  bench_4032_sq,
                  bench_4096_sq,
                  bench_4160_sq);
-*/
-criterion_main!(hot_spots);
-/*
+
+//criterion_main!(hot_spots);
+
 criterion_main!(
     small_4x_matrices,
     mid_4x_matrices,
@@ -386,4 +331,3 @@ criterion_main!(
     very_big_matrices,
     huge_matrices,
     gigantic);
-*/
