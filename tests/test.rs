@@ -40,7 +40,7 @@ fn matrix_8x10x8_test() {
 fn matrix_8x11x8_test() {
     matrix_madd_nmp(8,11,8);
 }
-/*
+
 #[test]
 fn matrix_1xn_test() {
     test_range(1, 512, &|n| { matrix_madd_nmp(1, n, 1) })
@@ -60,7 +60,7 @@ fn matrix_20xmx1_test() {
 fn matrix_40xmx2_test() {
     test_range(2, 64, &|m| { matrix_madd_nmp(40, m, 2) });
 }
-*/
+
 #[test]
 fn matrix_1to20_sq() {
     test_range(1, 20, &|n| {
@@ -76,18 +76,20 @@ fn matrix_7x6_6xn() {
         matrix_madd_nmp(7,6,n)
     })
 }
-/*
+
 #[test]
 fn matrix_nmp_small() {
-    for n in 1 .. 35 {
-        for m in 1 .. 35 {
-            test_range(1, 35, &|p| {
-                matrix_madd_nmp(n, m, p)
+    for n in 8 .. 32 {
+        for m in 8 .. 32 {
+            test_range(8, 32, &|p| {
+                if m != n || m != p || n != p {
+                    matrix_madd_nmp(n, m, p)
+                }
             })
         }
     }
 }
-*/
+
 #[test]
 fn matrix_28_to_36_sq() {
     test_range(28, 36, &|n| {
@@ -112,6 +114,7 @@ fn matrix_124_to_132_sq() {
         matrix_madd_n_sq(120 + n * 4)
     })
 }
+
 
 #[test]
 fn matrix_252_to_260_sq_test() {
@@ -198,9 +201,8 @@ fn test_recurse_big_mp() {
     matrix_madd_nmp(240, 959, 959)
 }
 
-/*
 #[test]
 fn test_1492_1150_1201() {
     matrix_madd_nmp(1492, 1150, 1201)
 }
-*/
+

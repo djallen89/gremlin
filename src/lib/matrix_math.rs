@@ -9,34 +9,31 @@ const MICROBLOCKROW: usize = 4;
 const MICROBLOCKCOL: usize = 4;
 const MICROBLOCKM: usize = 4;
 /* Miniblocks should fit into L1D cache (optimized for amd64) */
-//(/ (* 32 1024) 3 8 32) 42
-//(- (/ (* 32 1024) 3 8 36) (% (/ (* 32 1024) 3 8 36) 4)) 36
-//(- (* 32 1024.0) (* 8 (+ (* 32 36) (* 36 40) (* 32 40)))) 1792.0
-
-//(/ (* 32 1024) 3 8 16) 85
-//(- (/ (* 32 1024) 3 8 16) (% (/ (* 32 1024) 3 8 16) 4)) 84
-//(- (* 32 1024.0) (* 8 (+ (* 16 36) (* 36 64) (* 16 64)))) 1536.0
-
-const MINIBLOCKROW: usize = 16;
-const MINIBLOCKCOL: usize = 64;
-const MINIBLOCKM: usize = 36;
+//(/ (* 32 1024) 3 8 8) 170
+//(- (/ (* 32 1024) 3 8 8) (% (/ (* 32 1024) 3 8 8) 4)) 168
+//(- (* 32 1024.0) (* 8 (+ (* 8 20) (* 20 128) (* 8 128)))) 2816.0
+//(- (* 32 1024.0) (* 8 (+ (* 4 16) (* 16 200) (* 4 200)))) 256.0
+//(- (* 32 1024.0) (* 8 (+ (* 8 12) (* 12 200) (* 8 200)))) 6656.0
+const MINIBLOCKROW: usize = 4; //8;
+const MINIBLOCKCOL: usize = 200; //128;
+const MINIBLOCKM: usize = 16; //20;
 /* Blocks should fit into L2 cache (optimized for amd64) */
-//(* 32 2) 64
-//(/ (* 512 1024) 3 8 64) 341
-//(- (* 512 1024) (* 8 (+ (* 64 108) (* 108 340) (* 64 340)))) 1152
-const BLOCKROW: usize = 64;
-const BLOCKCOL: usize = 340;
-const BLOCKM: usize = 108;
+//(/ (* 512 1024) 3 8 32) 682
+//(- 341  (% 341 64)) 320
+//(- (* 512 1024) (* 8 (+ (* 48 108) (* 108 384) (* 48 384)))) 3584
+//(- (* 512 1024) (* 8 (+ (* 64 72) (* 72 448) (* 64 448)))) 0
+//(- (* 512 1024) (* 8 (+ (* 32 64) (* 64 660) (* 32 660)))) 1024
+const BLOCKROW: usize =  48;
+const BLOCKCOL: usize = 384;
+const BLOCKM:   usize = 108;
 /* Megablocks should fit into L3 cache.
 This should probably be parameterized since it varies much by architecture. */
 //(* 64 6) 384
 //(/ (* 8 1024 1024) 3 8 384) 910
-//(- (/ (* 8 1024 1024) 3 8 384) (% (/ (* 8 1024 1024) 3 8 384) 4)) 908
-//(* 32 17) 544
-//(- (* 8 1024 1024.0) (* 8 (+ (* 384 540) (* 540 908) (* 384 908)))) 17792.0
+//(- (* 8 1024 1024.0) (* 8 (+ (* 384 548) (* 548 896) (* 384 896)))) 24576.0
 const MEGABLOCKROW: usize = 384;
-const MEGABLOCKCOL: usize = 908;
-const MEGABLOCKM: usize = 540;
+const MEGABLOCKCOL: usize = 896;
+const MEGABLOCKM: usize = 548;
 
 type Stride = usize;
 type Dim = usize;
