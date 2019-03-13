@@ -49,7 +49,7 @@ macro_rules! row_grabber4 {
     };
 }
 
-#[inline(always)]
+#[inline]
 unsafe fn madd(a: ConstPtr, b: ConstPtr, c: MutPtr) {
     let res = (*a).mul_add(*b, *c);
     *c = res;
@@ -209,6 +209,14 @@ pub fn matrix_mul_add(m_stride: Stride,
         inner_matrix_mul_add(m_stride, p_stride,
                              n_rows, m_dim, p_cols,
                              a, b, c);
+    } else if n_rows <= BLOCKROW && m_dim <= BLOCKM && p_cols <= BLOCKCOL {
+        middle_matrix_mul_add(m_stride, p_stride,
+                           n_rows, m_dim, p_cols,
+                           a, b, c)
+    } else if n_rows <= MEGABLOCKROW && m_dim <= MEGABLOCKM && p_cols <= MEGABLOCKCOL {
+        outer_matrix_mul_add(m_stride, p_stride,
+                             n_rows, m_dim, p_cols,
+                             a, b, c)
     } else {
         big_matrix_mul_add(m_stride, p_stride,
                            n_rows, m_dim, p_cols,
@@ -219,192 +227,21 @@ pub fn matrix_mul_add(m_stride: Stride,
 fn big_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                       n_rows: Dim, m_dim: Dim, p_cols: Dim,
                       a: ConstPtr, b: ConstPtr, c: MutPtr) {
-
-    let (row_rem, col_rem, m_rem) = remainders(n_rows, p_cols, m_dim,
-                                               MEGABLOCKROW, MEGABLOCKCOL, MEGABLOCKM);
-    let (stripes, pillars, blocks) = delimiters(n_rows, p_cols, m_dim,
-                                                row_rem, col_rem, m_rem);
-
-    upper_kernel(m_stride, p_stride,
-                 MEGABLOCKROW, MEGABLOCKM, MEGABLOCKCOL,
-                 stripes, blocks, pillars,
-                 m_rem, col_rem,
-                 a, b, c, &outer_matrix_mul_add);
-
-
-    if row_rem == 0 {
-        return
-    }
-
-    unsafe {
-        for block in (0 .. blocks).step_by(MEGABLOCKM) {
-            let a_idx = get_idx(stripes, block, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-
-            for pillar in (0 .. pillars).step_by(MEGABLOCKCOL) {
-                let c_idx = get_idx(stripes, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-
-
-                let b_idx = get_idx(block, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                outer_matrix_mul_add(m_stride, p_stride,
-                                     row_rem, MEGABLOCKM, MEGABLOCKCOL,
-                                     a_chunk, b_rows, c_chunk);
-            }
-        }
-
-        if m_rem > 0 {
-            let a_idx = get_idx(stripes, blocks, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-
-            for pillar in (0 .. pillars).step_by(MEGABLOCKCOL) {
-                let c_idx = get_idx(stripes, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-
-                let b_idx = get_idx(blocks, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                outer_matrix_mul_add(m_stride, p_stride,
-                                     row_rem, m_rem, MEGABLOCKCOL,
-                                     a_chunk, b_rows, c_chunk);
-            }
-        }
-    }
-
-    if col_rem == 0 {
-        return
-    }
-
-    unsafe {
-        let c_idx = get_idx(stripes, pillars, p_stride);
-        let c_chunk = c.offset(c_idx as isize);
-
-        for block in (0 .. blocks).step_by(MEGABLOCKM) {
-            let a_idx = get_idx(stripes, block, m_stride);
-            let a_rows = a.offset(a_idx as isize);
-
-            let b_idx = get_idx(block, pillars, p_stride);
-            let b_cols = b.offset(b_idx as isize);
-
-            outer_matrix_mul_add(m_stride, p_stride,
-                                 row_rem, MEGABLOCKM, col_rem,
-                                 a_rows, b_cols, c_chunk);
-
-        }
-
-        if m_rem == 0 {
-            return
-        }
-
-        let c_idx = get_idx(stripes, pillars, p_stride);
-        let c_chunk = c.offset(c_idx as isize);
-
-        let a_idx = get_idx(stripes, blocks, m_stride);
-        let a_rows = a.offset(a_idx as isize);
-
-        let b_idx = get_idx(blocks, pillars, p_stride);
-        let b_cols = b.offset(b_idx as isize);
-
-        outer_matrix_mul_add(m_stride, p_stride,
-                             row_rem, m_rem, col_rem,
-                             a_rows, b_cols, c_chunk);
-    }
+    kernel(m_stride, p_stride,
+           n_rows, m_dim, p_cols,
+           a, b, c,
+           MEGABLOCKROW, MEGABLOCKM, MEGABLOCKCOL,
+           &outer_matrix_mul_add);
 }
 
 fn outer_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                         n_rows: Dim, m_dim: Dim, p_cols: Dim,
                         a: ConstPtr, b: ConstPtr, c: MutPtr) {
-
-    let (row_rem, col_rem, m_rem) = remainders(n_rows, p_cols, m_dim,
-                                               BLOCKROW, BLOCKCOL, BLOCKM);
-    let (stripes, pillars, blocks) = delimiters(n_rows, p_cols, m_dim,
-                                                row_rem, col_rem, m_rem);
-    upper_kernel(m_stride, p_stride,
-                 BLOCKROW, BLOCKM, BLOCKCOL,
-                 stripes, blocks, pillars,
-                 m_rem, col_rem,
-                 a, b, c, &middle_matrix_mul_add);
-
-    if row_rem == 0 {
-        return
-    }
-
-    unsafe {
-        for block in (0 .. blocks).step_by(BLOCKM) {
-            let a_idx = get_idx(stripes, block, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-
-            for pillar in (0 .. pillars).step_by(BLOCKCOL) {
-                let c_idx = get_idx(stripes, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-
-
-                let b_idx = get_idx(block, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                middle_matrix_mul_add(m_stride, p_stride,
-                                      row_rem, BLOCKM, BLOCKCOL,
-                                      a_chunk, b_rows, c_chunk);
-            }
-        }
-
-        if m_rem > 0 {
-            let a_idx = get_idx(stripes, blocks, m_stride);
-            let a_chunk = a.offset(a_idx as isize);
-
-            for pillar in (0 .. pillars).step_by(BLOCKCOL) {
-                let c_idx = get_idx(stripes, pillar, p_stride);
-                let c_chunk = c.offset(c_idx as isize);
-
-                let b_idx = get_idx(blocks, pillar, p_stride);
-                let b_rows = b.offset(b_idx as isize);
-
-                middle_matrix_mul_add(m_stride, p_stride,
-                                      row_rem, m_rem, BLOCKCOL,
-                                      a_chunk, b_rows, c_chunk);
-            }
-        }
-    }
-
-    if col_rem == 0 {
-        return
-    }
-
-    unsafe {
-        let c_idx = get_idx(stripes, pillars, p_stride);
-        let c_chunk = c.offset(c_idx as isize);
-
-        for block in (0 .. blocks).step_by(BLOCKM) {
-            let a_idx = get_idx(stripes, block, m_stride);
-            let a_rows = a.offset(a_idx as isize);
-
-            let b_idx = get_idx(block, pillars, p_stride);
-            let b_cols = b.offset(b_idx as isize);
-
-            middle_matrix_mul_add(m_stride, p_stride,
-                                  row_rem, BLOCKM, col_rem,
-                                  a_rows, b_cols, c_chunk);
-        }
-
-        if m_rem == 0 {
-            return
-        }
-
-        let c_idx = get_idx(stripes, pillars, p_stride);
-        let c_chunk = c.offset(c_idx as isize);
-
-        let a_idx = get_idx(stripes, blocks, m_stride);
-        let a_rows = a.offset(a_idx as isize);
-
-        let b_idx = get_idx(blocks, pillars, p_stride);
-        let b_cols = b.offset(b_idx as isize);
-
-        middle_matrix_mul_add(m_stride, p_stride,
-                              row_rem, m_rem, col_rem,
-                              a_rows, b_cols, c_chunk);
-    }
+    kernel(m_stride, p_stride,
+           n_rows, m_dim, p_cols,
+           a, b, c,
+           BLOCKROW, BLOCKM, BLOCKCOL,
+           &middle_matrix_mul_add);
 }
 
 fn middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
@@ -416,11 +253,34 @@ fn middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
     let (stripes, pillars, blocks) = delimiters(n_rows, p_cols, m_dim,
                                                 row_rem, col_rem, m_rem);
 
-    upper_kernel(m_stride, p_stride,
-                 MINIBLOCKROW, MINIBLOCKM, MINIBLOCKCOL,
-                 stripes, blocks, pillars,
-                 m_rem, col_rem,
-                 a, b, c, &inner_matrix_mul_add);
+    for stripe in (0 .. stripes).step_by(MINIBLOCKROW) {
+        for block in (0 .. blocks).step_by(MINIBLOCKM) {
+            block_kernel(m_stride, p_stride, MINIBLOCKROW, MINIBLOCKM, MINIBLOCKCOL,
+                         stripe, block, pillars, a, b, c, &inner_matrix_mul_add);
+        }
+        /* Finish adding remaining the products of A's columns by b's rows */
+        block_kernel(m_stride, p_stride, MINIBLOCKROW, m_rem, MINIBLOCKCOL,
+                     stripe, blocks, pillars, a, b, c, &inner_matrix_mul_add);
+
+        if col_rem > 0 {
+            unsafe {
+                let c_idx = get_idx(stripe, pillars, p_stride);
+                let c_chunk = c.offset(c_idx as isize);
+
+                for block in (0 .. blocks).step_by(MINIBLOCKM) {
+                    col_rem_kernel(m_stride, p_stride,
+                                   MINIBLOCKROW, MINIBLOCKM, col_rem,
+                                   stripe, block, pillars,
+                                   a, b, c_chunk, &inner_matrix_mul_add);
+                }
+
+                col_rem_kernel(m_stride, p_stride,
+                               MINIBLOCKROW, m_rem, col_rem,
+                               stripe, blocks, pillars,
+                               a, b, c_chunk, &inner_matrix_mul_add);
+            }
+        }
+    }
 
     if row_rem == 0 {
         return
@@ -508,6 +368,9 @@ fn inner_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                                                MICROBLOCKROW, MICROBLOCKCOL, MICROBLOCKM);
     let (stripes, pillars, blocks) = delimiters(n_rows, p_cols, m_dim,
                                                 row_rem, col_rem, m_rem);
+    let cleanup_col_rem = p_cols % CACHELINE;
+    let cleanup_pillars = p_cols - cleanup_col_rem;
+
     /* Take on the big left corner*/
     for stripe in (0 .. stripes).step_by(MICROBLOCKROW) {
         let mut a_arr = [0.0; MICROBLOCKROW * MICROBLOCKM];
@@ -533,28 +396,57 @@ fn inner_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                 }
             }
         }
+    }
 
+    for row in 0 .. stripes {
         /* Finish adding remaining the products of A's columns by b's rows */
-        // Pillar/k/row is a good arrangement
-        for pillar in (0 .. pillars).step_by(MICROBLOCKCOL) {
+        unsafe {
             for k in blocks .. m_dim {
-                for row in 0 .. MICROBLOCKROW {
-                    unsafe {
-                        let a_idx = get_idx(stripe + row, k, m_stride);
-                        let a_elt = *a.offset(a_idx as isize);
+                let a_idx = get_idx(row, k, m_stride);
+                let a_elt = *a.offset(a_idx as isize);
+                let a_mult = _mm256_broadcast_sd(&a_elt);                   
+                for pillar in (0 .. cleanup_pillars).step_by(CACHELINE) {
+                    let b1_idx = get_idx(k, pillar, p_stride);
+                    let b1_row = b.offset(b1_idx as isize);
+                    let b1_row_vec = _mm256_loadu_pd(b1_row);
 
-                        let b_idx = get_idx(k, pillar, p_stride);
-                        let b_row = b.offset(b_idx as isize);
+                    let b2_idx = get_idx(k, pillar + 4, p_stride);
+                    let b2_row = b.offset(b2_idx as isize);
+                    let b2_row_vec = _mm256_loadu_pd(b2_row);
+                    
+                    let c1_idx = get_idx(row, pillar, p_stride);
+                    let c1_row = c.offset(c1_idx as isize);
+                    let mut c1_row_vec = _mm256_loadu_pd(c1_row as *const f64);
 
-                        let c_idx = get_idx(stripe + row, pillar, p_stride);
-                        let c_row = c.offset(c_idx as isize);
-                        scalar_vec_fmadd_f64u(&a_elt, b_row, c_row);
-                    }
+                    c1_row_vec = _mm256_fmadd_pd(a_mult, b1_row_vec, c1_row_vec);
+                    _mm256_storeu_pd(c1_row, c1_row_vec);
+
+                    let c2_idx = get_idx(row, pillar + 4, p_stride);
+                    let c2_row = c.offset(c2_idx as isize);
+                    let mut c2_row_vec = _mm256_loadu_pd(c2_row as *const f64);
+
+                    c2_row_vec = _mm256_fmadd_pd(a_mult, b2_row_vec, c2_row_vec);
+                    _mm256_storeu_pd(c2_row, c2_row_vec);
+                }
+
+                for pillar in (cleanup_pillars .. pillars).step_by(MICROBLOCKCOL) {
+                    let b_idx = get_idx(k, pillar, p_stride);
+                    let b_row = b.offset(b_idx as isize);
+                    let b_row_vec = _mm256_loadu_pd(b_row);
+                    
+                    let c_idx = get_idx(row, pillar, p_stride);
+                    let c_row = c.offset(c_idx as isize);
+                    let mut c_row_vec: __m256d = _mm256_loadu_pd(c_row as *const f64);
+
+                    c_row_vec = _mm256_fmadd_pd(a_mult, b_row_vec, c_row_vec);
+                    _mm256_storeu_pd(c_row, c_row_vec);
                 }
             }
         }
-
-        if pillars != p_cols {
+    }
+    
+    if pillars != p_cols {
+        for stripe in (0 .. stripes).step_by(MICROBLOCKROW) {
             for block in (0 .. blocks).step_by(MICROBLOCKM) {
                 unsafe {
                     let a_idx = get_idx(stripe, block, m_stride);
@@ -593,8 +485,6 @@ fn inner_matrix_mul_add(m_stride: Stride, p_stride: Stride,
         return;
     }
 
-    let cleanup_col_rem = p_cols % CACHELINE;
-    let cleanup_pillars = p_cols - cleanup_col_rem;
     for pillar in (0 .. cleanup_pillars).step_by(CACHELINE) {
         for k in (0 .. blocks).step_by(MICROBLOCKM) {
             let mut b_arr = [0.0; 32];
@@ -732,6 +622,7 @@ fn inner_matrix_mul_add(m_stride: Stride, p_stride: Stride,
     }
 }
 
+#[inline]
 unsafe fn inner_small_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                                      n_rows: Dim, m_dim: Dim, p_cols: Dim,
                                      a: ConstPtr, b: ConstPtr, c: MutPtr) {
@@ -784,6 +675,7 @@ unsafe fn inner_small_matrix_mul_add(m_stride: Stride, p_stride: Stride,
 
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
+#[inline]
 unsafe fn inner_middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
                                       n_rows: Dim, m_dim: Dim, p_cols: Dim,
                                       a: ConstPtr, b: ConstPtr, c: MutPtr) {
@@ -861,22 +753,27 @@ unsafe fn inner_middle_matrix_mul_add(m_stride: Stride, p_stride: Stride,
     }
 }
 
-#[inline(always)]
-fn upper_kernel(m_stride: Stride, p_stride: Stride,
-                row_block: Dim, m_block: Dim, col_block: Dim,
-                stripes: Dim, blocks: Dim, pillars: Dim,
-                m_rem: Dim, col_rem: Dim,
-                a: ConstPtr, b: ConstPtr, c: MutPtr,
-                block_fn: BlockFn) {
+fn kernel(m_stride: Stride, p_stride: Stride,
+          n_rows: Dim, m_dim: Dim, p_cols: Dim,
+          a: ConstPtr, b: ConstPtr, c: MutPtr,
+          row_block: Dim, m_block: Dim, col_block: Dim,
+          block_fn: BlockFn) {
+    
+    let (row_rem, col_rem, m_rem) = remainders(n_rows, p_cols, m_dim,
+                                               row_block, col_block, m_block);
+    let (stripes, pillars, blocks) = delimiters(n_rows, p_cols, m_dim,
+                                                row_rem, col_rem, m_rem);
 
     for stripe in (0 .. stripes).step_by(row_block) {
         for block in (0 .. blocks).step_by(m_block) {
             block_kernel(m_stride, p_stride, row_block, m_block, col_block,
-                          stripe, block, pillars, a, b, c, block_fn);
+                         stripe, block, pillars, a, b, c, block_fn);
         }
+    }
+    for stripe in (0 .. stripes).step_by(row_block) {
         /* Finish adding remaining the products of A's columns by b's rows */
         block_kernel(m_stride, p_stride, row_block, m_rem, col_block,
-                      stripe, blocks, pillars, a, b, c, &block_fn);
+                     stripe, blocks, pillars, a, b, c, &block_fn);
 
         if col_rem > 0 {
             unsafe {
@@ -897,8 +794,88 @@ fn upper_kernel(m_stride: Stride, p_stride: Stride,
             }
         }
     }
+
+    if row_rem == 0 {
+        return
+    }
+
+    unsafe {
+        for block in (0 .. blocks).step_by(m_block) {
+            let a_idx = get_idx(stripes, block, m_stride);
+            let a_chunk = a.offset(a_idx as isize);
+
+            for pillar in (0 .. pillars).step_by(col_block) {
+                let c_idx = get_idx(stripes, pillar, p_stride);
+                let c_chunk = c.offset(c_idx as isize);
+
+
+                let b_idx = get_idx(block, pillar, p_stride);
+                let b_rows = b.offset(b_idx as isize);
+
+                block_fn(m_stride, p_stride,
+                         row_rem, m_block, col_block,
+                         a_chunk, b_rows, c_chunk);
+            }
+        }
+
+        if m_rem > 0 {
+            let a_idx = get_idx(stripes, blocks, m_stride);
+            let a_chunk = a.offset(a_idx as isize);
+
+            for pillar in (0 .. pillars).step_by(col_block) {
+                let c_idx = get_idx(stripes, pillar, p_stride);
+                let c_chunk = c.offset(c_idx as isize);
+
+                let b_idx = get_idx(blocks, pillar, p_stride);
+                let b_rows = b.offset(b_idx as isize);
+
+                block_fn(m_stride, p_stride,
+                         row_rem, m_rem, col_block,
+                         a_chunk, b_rows, c_chunk);
+            }
+        }
+    }
+
+    if col_rem == 0 {
+        return
+    }
+
+    unsafe {
+        let c_idx = get_idx(stripes, pillars, p_stride);
+        let c_chunk = c.offset(c_idx as isize);
+
+        for block in (0 .. blocks).step_by(m_block) {
+            let a_idx = get_idx(stripes, block, m_stride);
+            let a_rows = a.offset(a_idx as isize);
+
+            let b_idx = get_idx(block, pillars, p_stride);
+            let b_cols = b.offset(b_idx as isize);
+
+            block_fn(m_stride, p_stride,
+                     row_rem, m_block, col_rem,
+                     a_rows, b_cols, c_chunk);
+        }
+
+        if m_rem == 0 {
+            return
+        }
+
+        let c_idx = get_idx(stripes, pillars, p_stride);
+        let c_chunk = c.offset(c_idx as isize);
+
+        let a_idx = get_idx(stripes, blocks, m_stride);
+        let a_rows = a.offset(a_idx as isize);
+
+        let b_idx = get_idx(blocks, pillars, p_stride);
+        let b_cols = b.offset(b_idx as isize);
+
+        block_fn(m_stride, p_stride,
+                 row_rem, m_rem, col_rem,
+                 a_rows, b_cols, c_chunk);
+    }
 }
 
+#[inline]
 fn block_kernel(m_stride: Stride, p_stride: Stride,
                 subrow_step: Dim, block_rem: Dim, subcol_step: Dim,
                 stripe: Dim, block: Dim, pillars: Dim,
@@ -921,6 +898,7 @@ fn block_kernel(m_stride: Stride, p_stride: Stride,
     }
 }
 
+#[inline]
 fn col_rem_kernel(m_stride: Stride, p_stride: Stride,
                   subrow_step: usize, block_step: usize, col_rem: usize,
                   stripe: usize, block: usize, pillars: usize,
@@ -941,6 +919,7 @@ fn col_rem_kernel(m_stride: Stride, p_stride: Stride,
 
 #[target_feature(enable = "avx2")]
 #[cfg(any(target_arch = "x86_64"))]
+#[inline]
 unsafe fn column_cache_kernel(p_stride: Stride,
                               row: Dim, pillar: Dim,
                               a_arr: &[f64], b_ptr: ConstPtr, c: MutPtr) {
