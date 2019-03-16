@@ -64,6 +64,10 @@ pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
     return arr;
 }
 
+pub fn total_size(elt: usize, n: usize, m: usize, p: usize) -> usize {
+    elt * (n * m + m * p + n * p)
+}
+
 pub fn matrix_madd_n_sq(n: usize) {
     matrix_madd_nmp(n, n, n);
 }

@@ -116,7 +116,7 @@ bench_num_sq!(bench_100_sq);
 bench_num_sq!(bench_124_sq);
 criterion_group!(small_4x_matrices,
                  bench_60_sq, bench_64_sq, bench_68_sq, bench_80_sq,
-                 bench_96_sq, bench_100_sq, bench_124_sq);
+                 bench_96_sq, bench_100_sq);
 
 bench_num_sq!(bench_126_sq);
 bench_num_sq!(bench_127_sq);
@@ -130,7 +130,13 @@ bench_num_sq!(bench_132_sq);
 bench_num_sq!(bench_136_sq);
 bench_num_sq!(bench_180_sq);
 bench_num_sq!(bench_224_sq);
+bench_num_sq!(bench_252_sq);
+bench_num_sq!(bench_254_sq);
+bench_num_sq!(bench_255_sq);
 bench_num_sq!(bench_256_sq);
+bench_num_sq!(bench_257_sq);
+bench_num_sq!(bench_258_sq);
+bench_num_sq!(bench_260_sq);
 bench_num_sq!(bench_288_sq);
 bench_num_sq!(bench_300_sq);
 bench_num_sq!(bench_320_sq);
@@ -143,13 +149,19 @@ bench_num_sq!(bench_448_sq);
 bench_num_sq!(bench_480_sq);
 criterion_group!(mid_4x_matrices, bench_124_sq, bench_128_sq,
                  bench_132_sq, bench_136_sq, bench_180_sq,
-                 bench_224_sq, bench_256_sq, bench_288_sq,
+                 bench_224_sq, bench_252_sq, bench_254_sq,
+                 bench_255_sq, bench_256_sq, bench_257_sq,
+                 bench_258_sq, bench_260_sq, bench_288_sq,
                  bench_300_sq, bench_320_sq, bench_340_sq,
                  bench_352_sq, bench_360_sq, bench_384_sq,
                  bench_416_sq, bench_448_sq, bench_480_sq);
 
 bench_num_sq!(bench_508_sq);
+bench_num_sq!(bench_510_sq);
+bench_num_sq!(bench_511_sq);
 bench_num_sq!(bench_512_sq);
+bench_num_sq!(bench_513_sq);
+bench_num_sq!(bench_514_sq);
 bench_num_sq!(bench_516_sq);
 bench_num_sq!(bench_544_sq);
 bench_num_sq!(bench_576_sq);
@@ -158,7 +170,13 @@ bench_num_sq!(bench_640_sq);
 bench_num_sq!(bench_672_sq);
 bench_num_sq!(bench_704_sq);
 bench_num_sq!(bench_736_sq);
+bench_num_sq!(bench_764_sq);
+bench_num_sq!(bench_766_sq);
+bench_num_sq!(bench_767_sq);
 bench_num_sq!(bench_768_sq);
+bench_num_sq!(bench_769_sq);
+bench_num_sq!(bench_770_sq);
+bench_num_sq!(bench_772_sq);
 bench_num_sq!(bench_800_sq);
 bench_num_sq!(bench_840_sq);
 bench_num_sq!(bench_880_sq);
@@ -167,9 +185,11 @@ bench_num_sq!(bench_928_sq);
 bench_num_sq!(bench_960_sq);
 bench_num_sq!(bench_992_sq);
 criterion_group!(big_4x_matrices,
-                 bench_508_sq, bench_512_sq, bench_516_sq, bench_544_sq,
+                 bench_508_sq, bench_510_sq, bench_511_sq, bench_512_sq,
+                 bench_513_sq, bench_514_sq, bench_516_sq, bench_544_sq,
                  bench_576_sq, bench_608_sq, bench_640_sq, bench_672_sq,
-                 bench_704_sq, bench_736_sq, bench_768_sq,
+                 bench_704_sq, bench_736_sq, bench_764_sq, bench_766_sq, bench_767_sq,
+                 bench_768_sq, bench_769_sq, bench_770_sq, bench_772_sq,
                  bench_800_sq, bench_840_sq, bench_880_sq, bench_896_sq,
                  bench_928_sq, bench_960_sq, bench_992_sq);
 
@@ -300,58 +320,16 @@ criterion_group!(gigantic,
                  bench_4992_sq,
                  bench_5120_sq,
                  bench_5248_sq);
-                 
-bench_num_sq!(bench_252_sq);
-bench_num_sq!(bench_254_sq);
-bench_num_sq!(bench_255_sq);
-bench_num_sq!(bench_257_sq);
-bench_num_sq!(bench_258_sq);
-bench_num_sq!(bench_260_sq);
-bench_num_sq!(bench_510_sq);
-bench_num_sq!(bench_511_sq);
-bench_num_sq!(bench_513_sq);
-bench_num_sq!(bench_514_sq);
-bench_num_sq!(bench_764_sq);
-bench_num_sq!(bench_766_sq);
-bench_num_sq!(bench_767_sq);
-bench_num_sq!(bench_769_sq);
-bench_num_sq!(bench_770_sq);
-bench_num_sq!(bench_772_sq);
 
 criterion_group!(hot_spots,
-                 //bench_124_sq,
-                 //bench_126_sq, bench_127_sq,
-                 //bench_128_sq,
-                 //bench_129_sq, bench_130_sq,
-                 //bench_132_sq,
-                 
-                 bench_252_sq,
-                 //bench_254_sq, bench_255_sq,
-                 bench_256_sq,
-                 //bench_257_sq, bench_258_sq,
-                 bench_260_sq,
-                 
                  bench_508_sq,
-                 bench_510_sq,
-                 //bench_511_sq,
                  bench_512_sq,
-                 //bench_513_sq,
-                 bench_514_sq,
                  bench_516_sq,
 
-                 bench_764_sq,
-                 bench_766_sq, bench_767_sq,
-                 bench_768_sq,
-                 bench_769_sq, bench_770_sq,
-                 bench_772_sq,//);
-                 
                  bench_1020_sq,
-                 bench_1022_sq, bench_1023_sq,
                  bench_1024_sq,
-                 bench_1025_sq, bench_1026_sq,
                  bench_1028_sq,
-                 );
-/*
+
                  bench_1504_sq,
                  bench_1536_sq,
                  bench_1568_sq,
@@ -375,13 +353,12 @@ criterion_group!(hot_spots,
                  bench_4032_sq,
                  bench_4096_sq,
                  bench_4160_sq);
-*/
+
 criterion_main!(hot_spots);
 /*
 criterion_main!(
     small_4x_matrices,
     mid_4x_matrices,
-    hot_spots,
     big_4x_matrices,
     very_big_matrices,
     huge_matrices,

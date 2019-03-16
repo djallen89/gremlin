@@ -1,39 +1,43 @@
 use core::arch::x86_64::{__m256d, _mm256_broadcast_sd};
 use core::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd, _mm256_storeu_pd};
 use core::arch::x86_64::_mm256_fmadd_pd;
-use super::utilities::{FMADD, get_idx, delimiters, remainders};
+use super::utilities::{FMADD, get_idx, delimiters, remainders, total_size};
+use std::mem;
 
 const CACHELINE: usize = 8;
 /* Microblocks should fit into the register space of amd64. */
 const MICROBLOCKROW: usize = 4;
 const MICROBLOCKCOL: usize = 4;
 const MICROBLOCKM: usize = 4;
-/* Miniblocks should fit into L1D cache (optimized for amd64) */
-//(/ (* 32 1024) 3 8 8) 170
-//(- (/ (* 32 1024) 3 8 8) (% (/ (* 32 1024) 3 8 8) 4)) 168
-//(- (* 32 1024.0) (* 8 (+ (* 8 20) (* 20 128) (* 8 128)))) 2816.0
-//(- (* 32 1024.0) (* 8 (+ (* 4 16) (* 16 200) (* 4 200)))) 256.0
-//(- (* 32 1024.0) (* 8 (+ (* 8 12) (* 12 200) (* 8 200)))) 6656.0
-const MINIBLOCKROW: usize = 4; //8;
-const MINIBLOCKCOL: usize = 200; //128;
-const MINIBLOCKM: usize = 16; //20;
-/* Blocks should fit into L2 cache (optimized for amd64) */
-//(/ (* 512 1024) 3 8 32) 682
-//(- 341  (% 341 64)) 320
-//(- (* 512 1024) (* 8 (+ (* 48 108) (* 108 384) (* 48 384)))) 3584
-//(- (* 512 1024) (* 8 (+ (* 64 72) (* 72 448) (* 64 448)))) 0
-//(- (* 512 1024) (* 8 (+ (* 32 64) (* 64 660) (* 32 660)))) 1024
-const BLOCKROW: usize =  48;
-const BLOCKCOL: usize = 384;
-const BLOCKM:   usize = 108;
+
+/* Miniblocks should fit into L1D cache
+ * (- (* 32 1024.0) (* 8 (+ (* 4 16) (* 16 200) (* 4 200)))) 256.0
+ * 32KB * 1024B/KB - (8B/f64 * (4*16 + 16*200 + 4*200)) = 256 B of unused space
+ * (* 100 (/ 256.0 (* 32 1024))) 0.78125
+ * 0.78% of L1 cache unused */
+const MINIBLOCKROW: usize = 4;
+const MINIBLOCKCOL: usize = 200;
+const MINIBLOCKM: usize = 16;
+const L1_SIZE: usize = 32 * 1024;
+
+/* Blocks should fit into L2 cache
+ * (- (* 512 1024) (* 8 (+ (* 64 96) (* 96 368) (* 64 368)))) 4096
+ *  512KB * 1024B/KB - (8B/f64 * (64*96 + 96*364 + 64*368)) = 4096
+ * (* 100 (/ 4096.0 (* 512 1024))) 0.78125
+ * 0.78% of L2 cache unused */
+const BLOCKROW: usize = 64;
+const BLOCKCOL: usize = 368;
+const BLOCKM:   usize = 96;
+const L2_SIZE: usize = 512 * 1024; 
+
 /* Megablocks should fit into L3 cache.
-This should probably be parameterized since it varies much by architecture. */
-//(* 64 6) 384
-//(/ (* 8 1024 1024) 3 8 384) 910
-//(- (* 8 1024 1024.0) (* 8 (+ (* 384 548) (* 548 896) (* 384 896)))) 24576.0
-const MEGABLOCKROW: usize = 384;
-const MEGABLOCKCOL: usize = 896;
-const MEGABLOCKM: usize = 548;
+ * This should probably be parameterized. 
+ * (/ (* 8 1024 1024) 3 8 384) 910
+ * (- (* 8 1024 1024.0) (* 8 (+ (* 384 548) (* 548 896) (* 384 896)))) 24576.0 */
+const MEGABLOCKROW: usize = 160;
+const MEGABLOCKCOL: usize = 1536;
+const MEGABLOCKM: usize = 336;
+const L3_SIZE: usize = 8 * 1024 * 1024;
 
 type Stride = usize;
 type Dim = usize;
@@ -193,6 +197,7 @@ pub fn matrix_mul_add(m_stride: Stride,
                       p_stride: Stride,
                       n_rows: Dim, m_dim: Dim, p_cols: Dim,
                       a: ConstPtr, b: ConstPtr, c: MutPtr) {
+    let memory = total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols);
     if n_rows == 1 && p_cols <= 512 {
         unsafe {
             vector_matrix_mul_add(p_stride, m_dim, p_cols, &*a, b, c)
@@ -206,15 +211,18 @@ pub fn matrix_mul_add(m_stride: Stride,
         unsafe {
             dgemm_microkernel(m_stride, p_stride, a, b, c);
         }
-    } else if n_rows <= MINIBLOCKROW && m_dim <= MINIBLOCKM && p_cols <= MINIBLOCKCOL {
+        //} else if n_rows <= MINIBLOCKROW && m_dim <= MINIBLOCKM && p_cols <= MINIBLOCKCOL {
+    } else if memory <= L1_SIZE {
         inner_matrix_mul_add(m_stride, p_stride,
                              n_rows, m_dim, p_cols,
                              a, b, c);
-    } else if n_rows <= BLOCKROW && m_dim <= BLOCKM && p_cols <= BLOCKCOL {
+    //} else if n_rows <= BLOCKROW && m_dim <= BLOCKM && p_cols <= BLOCKCOL {
+    } else if memory <= L2_SIZE {
         middle_matrix_mul_add(m_stride, p_stride,
                            n_rows, m_dim, p_cols,
                            a, b, c)
-    } else if n_rows <= MEGABLOCKROW && m_dim <= MEGABLOCKM && p_cols <= MEGABLOCKCOL {
+        //} else if n_rows <= MEGABLOCKROW && m_dim <= MEGABLOCKM && p_cols <= MEGABLOCKCOL {
+    } else if memory <= L3_SIZE {
         outer_matrix_mul_add(m_stride, p_stride,
                              n_rows, m_dim, p_cols,
                              a, b, c)
@@ -777,17 +785,20 @@ fn kernel(m_stride: Stride, p_stride: Stride,
                                                 row_rem, col_rem, m_rem);
 
     for stripe in (0 .. stripes).step_by(row_block) {
+        /* Do the products in the upper left corner */
         for block in (0 .. blocks).step_by(m_block) {
             block_kernel(m_stride, p_stride, row_block, m_block, col_block,
                          stripe, block, pillars, a, b, c, block_fn);
         }
+        /* Finish adding remaining the products of A's columns by b's rows */
         block_kernel(m_stride, p_stride, row_block, m_rem, col_block,
                      stripe, blocks, pillars, a, b, c, &block_fn);
 
     }
-    for stripe in (0 .. stripes).step_by(row_block) {
-        /* Finish adding remaining the products of A's columns by b's rows */
-        if col_rem > 0 {
+
+    /* Add columns to the left */
+    if col_rem > 0 {
+        for stripe in (0 .. stripes).step_by(row_block) {
             unsafe {
                 let c_idx = get_idx(stripe, pillars, p_stride);
                 let c_chunk = c.offset(c_idx as isize);
@@ -999,8 +1010,8 @@ unsafe fn dgemm_microkernel(m_stride: Stride, p_stride: Stride,
         a_arr[row * MICROBLOCKM + 3] = *a.offset((a_idx + 3) as isize);
     }
 
+    let mut c_idx = 0;
     for row in 0 .. MICROBLOCKROW {
-        let c_idx = get_idx(row, 0, p_stride);
         let c_elt = c.offset(c_idx as isize);
         let mut c_row: __m256d = _mm256_loadu_pd(c_elt as *const f64);
 
@@ -1009,13 +1020,14 @@ unsafe fn dgemm_microkernel(m_stride: Stride, p_stride: Stride,
             let a_elt = &a_arr[a_idx];
             let a_mult: __m256d = _mm256_broadcast_sd(a_elt);
 
-            let b_idx = get_idx(k, 0, MICROBLOCKCOL);
+            let b_idx = k * MICROBLOCKCOL;
             let b_elt = &(b_arr[b_idx]) as *const f64;
             let b_row: __m256d = _mm256_loadu_pd(b_elt);
             c_row = _mm256_fmadd_pd(a_mult, b_row, c_row);
         }
 
         _mm256_storeu_pd(c_elt, c_row);
+        c_idx += p_stride;
     }
 }
 
