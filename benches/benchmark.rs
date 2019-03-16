@@ -354,8 +354,8 @@ criterion_group!(hot_spots,
                  bench_4096_sq,
                  bench_4160_sq);
 
-criterion_main!(hot_spots);
-/*
+//criterion_main!(hot_spots);
+
 criterion_main!(
     small_4x_matrices,
     mid_4x_matrices,
@@ -363,4 +363,4 @@ criterion_main!(
     very_big_matrices,
     huge_matrices,
     gigantic);
-*/
+
