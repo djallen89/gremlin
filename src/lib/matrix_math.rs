@@ -6,38 +6,38 @@ use std::mem;
 
 const CACHELINE: usize = 8;
 /* Microblocks should fit into the register space of amd64. */
-const MICROBLOCKROW: usize = 4;
-const MICROBLOCKCOL: usize = 4;
-const MICROBLOCKM: usize = 4;
+pub const MICROBLOCKROW: usize = 4;
+pub const MICROBLOCKCOL: usize = 4;
+pub const MICROBLOCKM: usize = 4;
 
 /* Miniblocks should fit into L1D cache
  * (- (* 32 1024.0) (* 8 (+ (* 4 16) (* 16 200) (* 4 200)))) 256.0
  * 32KB * 1024B/KB - (8B/f64 * (4*16 + 16*200 + 4*200)) = 256 B of unused space
  * (* 100 (/ 256.0 (* 32 1024))) 0.78125
  * 0.78% of L1 cache unused */
-const MINIBLOCKROW: usize = 4;
-const MINIBLOCKCOL: usize = 200;
-const MINIBLOCKM: usize = 16;
-const L1_SIZE: usize = 32 * 1024;
+pub const MINIBLOCKROW: usize = 4;
+pub const MINIBLOCKCOL: usize = 200;
+pub const MINIBLOCKM: usize = 16;
+pub const L1_SIZE: usize = 32 * 1024;
 
 /* Blocks should fit into L2 cache
  * (- (* 512 1024) (* 8 (+ (* 64 96) (* 96 368) (* 64 368)))) 4096
  *  512KB * 1024B/KB - (8B/f64 * (64*96 + 96*364 + 64*368)) = 4096
  * (* 100 (/ 4096.0 (* 512 1024))) 0.78125
  * 0.78% of L2 cache unused */
-const BLOCKROW: usize = 64;
-const BLOCKCOL: usize = 368;
-const BLOCKM:   usize = 96;
-const L2_SIZE: usize = 512 * 1024;
+pub const BLOCKROW: usize = 64;
+pub const BLOCKCOL: usize = 368;
+pub const BLOCKM:   usize = 96;
+pub const L2_SIZE: usize = 512 * 1024;
 
 /* Megablocks should fit into L3 cache.
  * This should probably be parameterized.
  * (/ (* 8 1024 1024) 3 8 384) 910
  * (- (* 8 1024 1024.0) (* 8 (+ (* 384 548) (* 548 896) (* 384 896)))) 24576.0 */
-const MEGABLOCKROW: usize = 160;
-const MEGABLOCKCOL: usize = 1536;
-const MEGABLOCKM: usize = 336;
-const L3_SIZE: usize = 8 * 1024 * 1024;
+pub const MEGABLOCKROW: usize = 160;
+pub const MEGABLOCKCOL: usize = 1536;
+pub const MEGABLOCKM: usize = 336;
+pub const L3_SIZE: usize = 8 * 1024 * 1024;
 
 type Stride = usize;
 type Dim = usize;

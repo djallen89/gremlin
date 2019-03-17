@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate criterion;
-extern crate num_cpus;
 use gremlin_lib;
 
-use gremlin_lib::{random_array, matrix_madd_parallel};
+use gremlin_lib::{random_array, matrix_madd};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 
@@ -11,39 +10,29 @@ use criterion::{Benchmark, Criterion};
 
 fn bench_n_sq(crit: &mut Criterion, n: usize) {
     let my_name = format!("{:04}sq", n);
-    //let other_name = format!("ndarray {}sq", n);
-    
+
     let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
     let b = random_array(n, n, -10000.0, 10000.0);
-    let mut c = random_array(n, n, -10000.0, 10000.0);
+    let c = random_array(n, n, -10000.0, 10000.0);
 
-    //let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
-    //let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
-    //let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
-    let threads = 16;
-    let samples = if n < 1200 {
-        20
-    } else {
-        10
-    };
+    let aarr = Array::from_vec(a).into_shape((n, n)).unwrap();
+    let barr = Array::from_vec(b).into_shape((n, n)).unwrap();
+    let mut carr = Array::from_vec(c).into_shape((n, n)).unwrap();
 
     let bench_def;
     bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd_parallel(threads, n, n, n, &a, &b, &mut c)
+            general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
         }))
-        //.with_function(other_name, move |bch| bch.iter(|| {
-            //general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr)
-        //}))
-        .sample_size(samples);
+        .sample_size(10);
     
-    crit.bench("final_dgemm_parallel16", bench_def);
+    crit.bench("final_dgemm_ndarray", bench_def);
 }
 
 fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     
-    let my_name = format!("my dgemm parallel {}x{}x{}", n, m, p);
-    let other_name = format!("ndarray parallel {}x{}x{}", n, m, p);
+    let my_name = format!("my dgemm {}x{}x{}", n, m, p);
+    let other_name = format!("ndarray {}x{}x{}", n, m, p);
 
     let a: Vec<f64> = random_array(n, m, -100.0, 100.0);
     let b = random_array(m, p, -100.0, 100.0);
@@ -52,19 +41,17 @@ fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     let aarr = Array::from_vec(a.clone()).into_shape((n, m)).unwrap();
     let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
     let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
-
-    let threads = 16;
     
     let bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
-            matrix_madd_parallel(threads, n, m, p, &a, &b, &mut c);
+            matrix_madd(n, m, p, &a, &b, &mut c);
         }))
         .with_function(other_name, move |bch| bch.iter(|| {
             general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
         }))
         .sample_size(10);
     
-    crit.bench("dgemm", bench_def);
+    crit.bench("dgemm_ndarray", bench_def);
 }
 
 macro_rules! bench_num_sq {    
@@ -76,6 +63,31 @@ macro_rules! bench_num_sq {
         }
     }
 }
+
+bench_num_sq!(bench_4_sq);
+bench_num_sq!(bench_12_sq);
+bench_num_sq!(bench_16_sq);
+bench_num_sq!(bench_20_sq);
+bench_num_sq!(bench_28_sq);
+bench_num_sq!(bench_32_sq);
+bench_num_sq!(bench_36_sq);
+bench_num_sq!(bench_40_sq);
+bench_num_sq!(bench_44_sq);
+bench_num_sq!(bench_52_sq);
+bench_num_sq!(bench_56_sq);
+criterion_group!(tiny_4x_matrices,
+                 bench_4_sq,
+                 bench_12_sq,
+                 bench_16_sq,
+                 bench_20_sq,
+                 bench_28_sq,
+                 bench_32_sq,
+                 bench_36_sq,
+                 bench_40_sq,
+                 bench_44_sq,
+                 bench_52_sq,
+                 bench_56_sq);
+
 bench_num_sq!(bench_27_sq);
 bench_num_sq!(bench_29_sq);
 bench_num_sq!(bench_30_sq);
@@ -338,8 +350,10 @@ criterion_group!(hot_spots,
                  bench_4096_sq,
                  bench_4160_sq);
 
+criterion_group!(remainder,
+                 bench_4744_sq, bench_4936_sq, bench_4992_sq);
 //criterion_main!(hot_spots);
-
+/*
 criterion_main!(
     small_4x_matrices,
     mid_4x_matrices,
@@ -347,3 +361,5 @@ criterion_main!(
     very_big_matrices,
     huge_matrices,
     gigantic);
+ */
+criterion_main!(remainder);

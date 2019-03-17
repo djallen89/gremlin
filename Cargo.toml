@@ -25,5 +25,21 @@ name = "benchmark"
 harness = false
 
 [[bench]]
+name = "benchndarray"
+harness = false
+
+[[bench]]
 name = "parallel"
+harness = false
+
+[[bench]]
+name = "parallel2"
+harness = false
+
+[[bench]]
+name = "parallel4"
+harness = false
+
+[[bench]]
+name = "parallel16"
 harness = false

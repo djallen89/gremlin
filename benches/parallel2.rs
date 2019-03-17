@@ -21,7 +21,7 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
     //let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
     //let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
     //let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
-    let threads = num_cpus::get_physical();
+    let threads = 2;
     let samples = if n < 1200 {
         20
     } else {
@@ -38,7 +38,7 @@ fn bench_n_sq(crit: &mut Criterion, n: usize) {
         //}))
         .sample_size(samples);
     
-    crit.bench("final_dgemm_parallel", bench_def);
+    crit.bench("final_dgemm_parallel02", bench_def);
 }
 
 fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
@@ -54,7 +54,7 @@ fn bench_nmp(n: usize, m: usize, p: usize, crit: &mut Criterion) {
     let barr = Array::from_vec(b.clone()).into_shape((m, p)).unwrap();
     let mut carr = Array::from_vec(c.clone()).into_shape((n, p)).unwrap();
 
-    let threads = num_cpus::get_physical();
+    let threads = 2;
     
     let bench_def = Benchmark::new(
         my_name, move |bch| bch.iter(|| {
