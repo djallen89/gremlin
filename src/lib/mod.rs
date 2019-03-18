@@ -76,7 +76,7 @@ pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols:
     }
 }
 
-pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols :usize,
+pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
                      a: &[f64], b: &[f64], c: &mut [f64]) {
     if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L1_SIZE {
         return matrix_madd(n_rows, m_dim, p_cols, a, b, c);
@@ -137,8 +137,11 @@ pub fn matrix_madd_chunked(threads: usize, n_rows: usize, m_dim: usize, p_cols: 
     match threads {
         0 => panic!("0 cores available to do work"),
         1 => return matrix_madd(n_rows, m_dim, p_cols, a, b, c),
-        x => return multithreaded(x, n_rows, m_dim, p_cols,
-                                  a, b, c)
+        x => unsafe {
+            return chunked_multithreaded(x, m_dim, p_cols,
+                                         n_rows, m_dim, p_cols,
+                                         a.as_ptr(), b.as_ptr(), c.as_mut_ptr())
+        }
     }
 }
 
