@@ -83,6 +83,7 @@ fn matrix_nmp_small() {
         for m in 8 .. 32 {
             test_range(8, 32, &|p| {
                 if m != n || m != p || n != p {
+                    println!("{} {} {}", m, n, p);
                     matrix_madd_nmp(n, m, p)
                 }
             })
@@ -97,7 +98,6 @@ fn matrix_28_to_36_sq() {
         matrix_madd_n_sq(n)
     });
 }
-
 
 #[test]
 fn matrix_60_to_68_sq() {
@@ -114,7 +114,6 @@ fn matrix_124_to_132_sq() {
         matrix_madd_n_sq(120 + n * 4)
     })
 }
-
 
 #[test]
 fn matrix_252_to_260_sq_test() {
