@@ -43,3 +43,7 @@ harness = false
 [[bench]]
 name = "parallel16"
 harness = false
+
+[[bench]]
+name = "chunked_8"
+harness = false

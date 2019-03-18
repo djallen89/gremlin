@@ -5,6 +5,7 @@ use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 use super::matrix_madd;
 use super::matrix_madd_parallel;
+use super::matrix_madd_chunked;
 
 pub trait FMADD {
     fn fmadd(&mut self, a: Self, b: Self);
@@ -91,6 +92,24 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     matrix_madd(n, m, p, &a, &b, &mut c);
 
     test_equality(n, p, &c, &slice);
+}
+
+pub fn matrix_madd_n_sq_chunked(n: usize) {
+    let threads = num_cpus::get_physical();
+    let a: Vec<f64> = random_array(n, n, -10000.0, 10000.0);
+    let b = random_array(n, n, -10000.0, 10000.0);
+    let mut c = random_array(n, n, -10000.0, 10000.0);
+    
+    let aarr = Array::from_vec(a.clone()).into_shape((n, n)).unwrap();
+    let barr = Array::from_vec(b.clone()).into_shape((n, n)).unwrap();
+    let mut carr = Array::from_vec(c.clone()).into_shape((n, n)).unwrap();
+
+    general_mat_mul(1.0, &aarr, &barr, 1.0, &mut carr);
+    let slice = carr.as_slice().unwrap();
+    
+    matrix_madd_chunked(threads, n, n, n, &a, &b, &mut c);
+
+    test_equality(n, n, &c, &slice);
 }
 
 pub fn matrix_madd_n_sq_parallel(n: usize) {

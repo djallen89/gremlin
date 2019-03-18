@@ -11,10 +11,11 @@ pub use utilities::{get_idx, random_array, float_eq, test_equality};
 pub use utilities::{matrix_madd_n_sq, matrix_madd_nxm, matrix_madd_nmp};
 pub use utilities::{matrix_madd_n_sq_parallel, matrix_madd_nxm_parallel,
                     matrix_madd_nmp_parallel};
+pub use utilities::matrix_madd_n_sq_chunked;
 use utilities::{check_dimensionality, total_size};
 use matrix_math::{single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
 use matrix_math::scalar_vector_fmadd;
-use matrix_math::{L1_SIZE, MICROBLOCKCOL};
+use matrix_math::{L2_SIZE, L3_SIZE, MEGABLOCKCOL, BLOCKROW};
 use rayon::prelude::*;
 use danger_math::Ptr;
 use std::cmp::{min, max};
@@ -78,7 +79,7 @@ pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols:
 
 pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
                      a: &[f64], b: &[f64], c: &mut [f64]) {
-    if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L1_SIZE {
+    if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L3_SIZE / 8 {
         return matrix_madd(n_rows, m_dim, p_cols, a, b, c);
     }
 
@@ -156,22 +157,10 @@ unsafe fn chunked_multithreaded(threads: usize, m_stride: usize, p_stride: usize
                               a, b, c)
     }
 
-    const MINSIZE: usize = 128;
-    const MAXSIZE: usize = 572;
-    let biggest = max(n_rows, p_cols) / threads;
-    // we don't want to divvy up the work too much
-    let min_size = max(MINSIZE, biggest);
-    // likewise we don't want to take on too much with each thread
-    let max_size = min(MAXSIZE, biggest);
-    let size = if max_size == MAXSIZE {
-        max_size
-    } else {
-        min_size
-    };
-    
-    let args_vec = param_gather(size, m_stride, p_stride,
-                                 n_rows, m_dim, p_cols,
-                                 a, b, c);
+    let min_size = L2_SIZE;    
+    let args_vec = param_gather(threads, min_size, m_stride, p_stride,
+                                n_rows, m_dim, p_cols,
+                                a, b, c);
 
     args_vec.par_iter().for_each(|(rows, m, cols, a_ptr, b_ptr, c_ptr)| {
         let ap = a_ptr.as_ptr();
@@ -182,54 +171,58 @@ unsafe fn chunked_multithreaded(threads: usize, m_stride: usize, p_stride: usize
     });
 }
 
-unsafe fn param_gather(min_size: usize, m_stride: usize, p_stride: usize,
+unsafe fn param_gather(threads: usize, min_size: usize, m_stride: usize, p_stride: usize,
                        n_rows: usize, m_dim: usize, p_cols: usize,
                        a: *const f64, b: *const f64, c: *mut f64) -> Vec<MaddParams> {
+
+    
     let mut args_vec: Vec<MaddParams> = Vec::new();
     let size = total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols);
-    let biggest = 1;
-    if biggest < min_size {
+
+    if size <= min_size || (n_rows <= BLOCKROW && p_cols <= MEGABLOCKCOL) {
+    //if size <= min_size || n_rows <= BLOCKROW {
         return vec!((n_rows, m_dim, p_cols,
                      Ptr::from_ptr(a), Ptr::from_ptr(b), Ptr::from_ptr(c)))
     }
      
-    if biggest == n_rows {
-        let first_rows = n_rows / 2;
-        let last_rows = n_rows - first_rows;
-        
-        let a1 = a;
-        let a2 = a.offset((first_rows * m_stride) as isize);
-        let c1 = c;
-        let c2 = c.offset((first_rows * p_stride) as isize);
-
-        let mut args1 = param_gather(min_size, m_stride, p_stride,
-                                     first_rows, m_dim, p_cols,
-                                     a1, b, c1);
-        let mut args2 = param_gather(min_size, m_stride, p_stride,
-                                     last_rows, m_dim, p_cols,
-                                     a2, b, c2);
-
+    if n_rows >= BLOCKROW * 2 {
+        let row_rem = n_rows % BLOCKROW;
+        let stripes = n_rows - row_rem;
+        for stripe in (0 .. stripes).step_by(BLOCKROW) {
+            let a_ptr = a.offset((stripe * m_stride) as isize);
+            let c_ptr = c.offset((stripe * p_stride) as isize);
+            let mut args1 = param_gather(threads, min_size, m_stride, p_stride,
+                                         BLOCKROW, m_dim, p_cols,
+                                         a_ptr, b, c_ptr);
+            args_vec.append(&mut args1);
+        }
+        let a_ptr = a.offset((stripes * m_stride) as isize);
+        let c_ptr = c.offset((stripes * p_stride) as isize);
+        let mut args1 = param_gather(threads, min_size, m_stride, p_stride,
+                                     row_rem, m_dim, p_cols,
+                                     a_ptr, b, c_ptr);
         args_vec.append(&mut args1);
-        args_vec.append(&mut args2);
-
     } else {
-        let first_cols = p_cols / 2;
-        let last_cols = p_cols - first_cols;
+        let col_rem = p_cols % MEGABLOCKCOL;
+        let pillars = p_cols - col_rem;
+        for pillar in (0 .. pillars).step_by(MEGABLOCKCOL) {
+            let b_ptr = b.offset(pillar as isize);
+            let c_ptr = c.offset(pillar as isize);
 
-        let b1 = b;
-        let b2 = b.offset(first_cols as isize);
-        let c1 = c;
-        let c2 = c.offset(first_cols as isize);
+            let mut args1 = param_gather(threads, min_size, m_stride, p_stride,
+                                         n_rows, m_dim, MEGABLOCKCOL,
+                                         a, b_ptr, c_ptr);
+            args_vec.append(&mut args1);
+        }
+        
+        let b_ptr = b.offset(pillars as isize);
+        let c_ptr = c.offset(pillars as isize);
 
-        let mut args1 = param_gather(min_size, m_stride, p_stride,
-                                     n_rows, m_dim, first_cols,
-                                     a, b1, c1);
-        let mut args2 = param_gather(min_size, m_stride, p_stride,
-                                     n_rows, m_dim, last_cols,
-                                     a, b2, c2);
+        let mut args1 = param_gather(threads, min_size, m_stride, p_stride,
+                                     n_rows, m_dim, col_rem,
+                                     a, b_ptr, c_ptr);
 
         args_vec.append(&mut args1);
-        args_vec.append(&mut args2);
     }
 
     return args_vec;
