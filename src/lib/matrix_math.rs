@@ -45,7 +45,7 @@ type ConstPtr = *const f64;
 type MutPtr = *mut f64;
 type BlockFn<'a> = &'a Fn(Stride, Stride, Dim, Dim, Dim, ConstPtr, ConstPtr, MutPtr);
 
-trait Chunk {
+pub trait Chunk {
     fn get_chunk(&self, row: usize, column: usize, stride: Stride) -> Self;
 }
 
