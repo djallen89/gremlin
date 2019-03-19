@@ -13,9 +13,9 @@ pub use utilities::{matrix_madd_n_sq_parallel, matrix_madd_nxm_parallel,
                     matrix_madd_nmp_parallel};
 pub use utilities::matrix_madd_n_sq_chunked;
 use utilities::{check_dimensionality, total_size};
-use matrix_math::{single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
+use matrix_math::{Chunk, single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
 use matrix_math::scalar_vector_fmadd;
-use matrix_math::{L2_SIZE, L3_SIZE, MEGABLOCKCOL, BLOCKROW};
+use matrix_math::{L2_SIZE, BLOCKROW, BLOCKCOL, MEGABLOCKM};
 use rayon::prelude::*;
 use danger_math::Ptr;
 use std::cmp::{min, max};
@@ -79,7 +79,7 @@ pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols:
 
 pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
                      a: &[f64], b: &[f64], c: &mut [f64]) {
-    if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L3_SIZE / 8 {
+    if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L2_SIZE {
         return matrix_madd(n_rows, m_dim, p_cols, a, b, c);
     }
 
@@ -157,18 +157,106 @@ unsafe fn chunked_multithreaded(threads: usize, m_stride: usize, p_stride: usize
                               a, b, c)
     }
 
-    let min_size = L2_SIZE;    
+    //let min_size = L2_SIZE;
+    /*
     let args_vec = param_gather(threads, min_size, m_stride, p_stride,
                                 n_rows, m_dim, p_cols,
                                 a, b, c);
+     */
+    let block_args_vec = iter_param(m_stride, p_stride, n_rows, m_dim, p_cols, a, b, c);
+    for args_vec in block_args_vec.iter() {
+        for args in args_vec.iter() {
+        }
+        args_vec.par_iter().for_each(|(rows, m, cols, a_ptr, b_ptr, c_ptr)| {
+            let ap = a_ptr.as_ptr();
+            let bp = b_ptr.as_ptr();
+            let cp = c_ptr.as_mut_ptr();
 
-    args_vec.par_iter().for_each(|(rows, m, cols, a_ptr, b_ptr, c_ptr)| {
-        let ap = a_ptr.as_ptr();
-        let bp = b_ptr.as_ptr();
-        let cp = c_ptr.as_mut_ptr();
+            matrix_mul_add(m_stride, p_stride, *rows, *m, *cols, ap, bp, cp)
+        });
+    }
+}
 
-        matrix_mul_add(m_stride, p_stride, *rows, *m, *cols, ap, bp, cp)
-    });
+fn iter_param(m_stride: usize, p_stride: usize,
+              n_rows: usize, m_dim: usize, p_cols: usize,
+              a: *const f64, b: *const f64, c: *mut f64) -> Vec<Vec<MaddParams>> {
+    let mut block_args_vec: Vec<Vec<MaddParams>> = Vec::new();
+
+    let m_rem = m_dim % MEGABLOCKM;
+    let blocks = m_dim - m_rem;
+    let row_rem = n_rows % BLOCKROW;
+    let stripes = n_rows - row_rem;
+    let col_rem = p_cols % BLOCKCOL;
+    let pillars = p_cols - col_rem;
+
+    for block in (0 .. blocks).step_by(MEGABLOCKM) {
+        let mut args_vec = Vec::new();
+
+        for stripe in (0 .. stripes).step_by(BLOCKROW) {
+            let a_ptr = a.get_chunk(stripe, block, m_stride);
+            
+            for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+                let b_ptr = b.get_chunk(block, pillar, p_stride);
+                let c_ptr = c.get_chunk(stripe, pillar, p_stride);
+                args_vec.push((BLOCKROW, MEGABLOCKM, BLOCKCOL,
+                               Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+            }
+            
+            let b_ptr = b.get_chunk(block, pillars, p_stride);
+            let c_ptr = c.get_chunk(stripe, pillars, p_stride);
+            args_vec.push((BLOCKROW, MEGABLOCKM, col_rem,
+                           Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+        }
+
+        let a_ptr = a.get_chunk(stripes, block, m_stride);
+        for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+            let b_ptr = b.get_chunk(block, pillar, p_stride);
+            let c_ptr = c.get_chunk(stripes, pillar, p_stride);
+            args_vec.push((row_rem, MEGABLOCKM, BLOCKCOL,
+                           Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+        }
+        
+        let b_ptr = b.get_chunk(block, pillars, p_stride);
+        let c_ptr = c.get_chunk(stripes, pillars, p_stride);
+        args_vec.push((row_rem, MEGABLOCKM, col_rem,
+                       Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+        block_args_vec.push(args_vec);
+    }
+
+    let mut args_vec = Vec::new();
+
+    for stripe in (0 .. stripes).step_by(BLOCKROW) {
+        let a_ptr = a.get_chunk(stripe, blocks, m_stride);
+        
+        for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+            let b_ptr = b.get_chunk(blocks, pillar, p_stride);
+            let c_ptr = c.get_chunk(stripe, pillar, p_stride);
+            args_vec.push((BLOCKROW, m_rem, BLOCKCOL,
+                           Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+        }
+        
+        let b_ptr = b.get_chunk(blocks, pillars, p_stride);
+        let c_ptr = c.get_chunk(stripe, pillars, p_stride);
+        args_vec.push((BLOCKROW, m_rem, col_rem,
+                       Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+    }
+
+    let a_ptr = a.get_chunk(stripes, blocks, m_stride);
+    for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+        let b_ptr = b.get_chunk(blocks, pillar, p_stride);
+        let c_ptr = c.get_chunk(stripes, pillar, p_stride);
+        args_vec.push((row_rem, m_rem, BLOCKCOL,
+                       Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+    }
+    
+    let b_ptr = b.get_chunk(blocks, pillars, p_stride);
+    let c_ptr = c.get_chunk(stripes, pillars, p_stride);
+    args_vec.push((row_rem, m_rem, col_rem,
+                   Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
+    block_args_vec.push(args_vec);
+
+
+    block_args_vec
 }
 
 unsafe fn param_gather(threads: usize, min_size: usize, m_stride: usize, p_stride: usize,
@@ -179,7 +267,7 @@ unsafe fn param_gather(threads: usize, min_size: usize, m_stride: usize, p_strid
     let mut args_vec: Vec<MaddParams> = Vec::new();
     let size = total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols);
 
-    if size <= min_size || (n_rows <= BLOCKROW && p_cols <= MEGABLOCKCOL) {
+    if size <= min_size || (n_rows <= BLOCKROW && p_cols <= BLOCKCOL) {
     //if size <= min_size || n_rows <= BLOCKROW {
         return vec!((n_rows, m_dim, p_cols,
                      Ptr::from_ptr(a), Ptr::from_ptr(b), Ptr::from_ptr(c)))
@@ -203,14 +291,14 @@ unsafe fn param_gather(threads: usize, min_size: usize, m_stride: usize, p_strid
                                      a_ptr, b, c_ptr);
         args_vec.append(&mut args1);
     } else {
-        let col_rem = p_cols % MEGABLOCKCOL;
+        let col_rem = p_cols % BLOCKCOL;
         let pillars = p_cols - col_rem;
-        for pillar in (0 .. pillars).step_by(MEGABLOCKCOL) {
+        for pillar in (0 .. pillars).step_by(BLOCKCOL) {
             let b_ptr = b.offset(pillar as isize);
             let c_ptr = c.offset(pillar as isize);
 
             let mut args1 = param_gather(threads, min_size, m_stride, p_stride,
-                                         n_rows, m_dim, MEGABLOCKCOL,
+                                         n_rows, m_dim, BLOCKCOL,
                                          a, b_ptr, c_ptr);
             args_vec.append(&mut args1);
         }

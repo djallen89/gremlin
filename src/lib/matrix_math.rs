@@ -18,7 +18,7 @@ pub const MICROBLOCKM: usize = 4;
 pub const MINIBLOCKROW: usize = 4;
 pub const MINIBLOCKCOL: usize = 200;
 pub const MINIBLOCKM: usize = 16;
-pub const L1_SIZE: usize = 32 * 1024;
+//pub const L1_SIZE: usize = 32 * 1024;
 
 /* Blocks should fit into L2 cache
  * (- (* 512 1024) (* 8 (+ (* 64 96) (* 96 368) (* 64 368)))) 4096
@@ -33,7 +33,7 @@ pub const L2_SIZE: usize = 512 * 1024;
 /* Megablocks should fit into L3 cache.
  * This should probably be parameterized.
  * (/ (* 8 1024 1024) 3 8 384) 910
- * (- (* 8 1024 1024.0) (* 8 (+ (* 384 548) (* 548 896) (* 384 896)))) 24576.0 */
+ * (- (* 1 1024 1024.0) (* 8 (+ (* 384 548) (* 548 896) (* 384 896)))) 24576.0 */
 pub const MEGABLOCKROW: usize = 160;
 pub const MEGABLOCKCOL: usize = 1536;
 pub const MEGABLOCKM: usize = 336;
@@ -45,7 +45,7 @@ type ConstPtr = *const f64;
 type MutPtr = *mut f64;
 type BlockFn<'a> = &'a Fn(Stride, Stride, Dim, Dim, Dim, ConstPtr, ConstPtr, MutPtr);
 
-trait Chunk {
+pub trait Chunk {
     fn get_chunk(&self, row: usize, column: usize, stride: Stride) -> Self;
 }
 
