@@ -15,7 +15,7 @@ pub use utilities::matrix_madd_n_sq_chunked;
 use utilities::{check_dimensionality, total_size};
 use matrix_math::{Chunk, single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
 use matrix_math::scalar_vector_fmadd;
-use matrix_math::{L1_SIZE, L2_SIZE, BLOCKROW, BLOCKCOL, MEGABLOCKM};
+use matrix_math::{L1_SIZE, L2_SIZE, BLOCKROW, BLOCKCOL, BLOCKM};
 use rayon::prelude::*;
 use danger_math::Ptr;
 use std::cmp::{min, max};
@@ -166,8 +166,6 @@ unsafe fn chunked_multithreaded(threads: usize, m_stride: usize, p_stride: usize
      */
     let block_args_vec = iter_param(m_stride, p_stride, n_rows, m_dim, p_cols, a, b, c);
     for args_vec in block_args_vec.iter() {
-        for args in args_vec.iter() {
-        }
         args_vec.par_iter().for_each(|(rows, m, cols, a_ptr, b_ptr, c_ptr)| {
             let ap = a_ptr.as_ptr();
             let bp = b_ptr.as_ptr();
@@ -183,70 +181,92 @@ fn iter_param(m_stride: usize, p_stride: usize,
               a: *const f64, b: *const f64, c: *mut f64) -> Vec<Vec<MaddParams>> {
     let mut block_args_vec: Vec<Vec<MaddParams>> = Vec::new();
 
-    let m_rem = m_dim % MEGABLOCKM;
+    let block_ms = BLOCKM * 2;
+    //let mut block_rs = BLOCKROW;
+    let mut block_rs = n_rows;
+    while block_rs > BLOCKROW {
+        block_rs /= 4;
+    }
+    //let block_cs = BLOCKCOL;
+    let mut block_cs = p_cols;
+    while block_cs > BLOCKCOL {
+        block_cs /= 2;
+    }
+    let m_rem = m_dim % block_ms;
     let blocks = m_dim - m_rem;
-    let row_rem = n_rows % BLOCKROW;
+    let row_rem = match n_rows % block_rs {
+        0 => n_rows % block_rs,
+        x => n_rows % (block_rs - 1)
+    };
     let stripes = n_rows - row_rem;
-    let col_rem = p_cols % BLOCKCOL;
+    let col_rem = p_cols % block_cs;
     let pillars = p_cols - col_rem;
 
-    for block in (0 .. blocks).step_by(MEGABLOCKM) {
+    let total_stripes = (stripes / block_rs) + if row_rem > 0 { 1 } else { 0 };
+    let total_pillars = (pillars / block_cs) + if col_rem > 0 { 1 } else { 0 };
+    // (% 780 8) 4
+    if (total_stripes * total_pillars) % 8 != 0 {
+        panic!("Bad number of threads.\n {}, {}, {}", total_stripes % 2, total_pillars % 4,
+               total_stripes * total_pillars);
+    }
+
+    for block in (0 .. blocks).step_by(block_ms) {
         let mut args_vec = Vec::new();
 
-        for stripe in (0 .. stripes).step_by(BLOCKROW) {
+        for stripe in (0 .. stripes).step_by(block_rs) {
             let a_ptr = a.get_chunk(stripe, block, m_stride);
             
-            for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+            for pillar in (0 .. pillars).step_by(block_cs) {
                 let b_ptr = b.get_chunk(block, pillar, p_stride);
                 let c_ptr = c.get_chunk(stripe, pillar, p_stride);
-                args_vec.push((BLOCKROW, MEGABLOCKM, BLOCKCOL,
+                args_vec.push((block_rs, block_ms, block_cs,
                                Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
             }
             
             let b_ptr = b.get_chunk(block, pillars, p_stride);
             let c_ptr = c.get_chunk(stripe, pillars, p_stride);
-            args_vec.push((BLOCKROW, MEGABLOCKM, col_rem,
+            args_vec.push((block_rs, block_ms, col_rem,
                            Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
         }
 
         let a_ptr = a.get_chunk(stripes, block, m_stride);
-        for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+        for pillar in (0 .. pillars).step_by(block_cs) {
             let b_ptr = b.get_chunk(block, pillar, p_stride);
             let c_ptr = c.get_chunk(stripes, pillar, p_stride);
-            args_vec.push((row_rem, MEGABLOCKM, BLOCKCOL,
+            args_vec.push((row_rem, block_ms, block_cs,
                            Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
         }
         
         let b_ptr = b.get_chunk(block, pillars, p_stride);
         let c_ptr = c.get_chunk(stripes, pillars, p_stride);
-        args_vec.push((row_rem, MEGABLOCKM, col_rem,
+        args_vec.push((row_rem, block_ms, col_rem,
                        Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
         block_args_vec.push(args_vec);
     }
 
     let mut args_vec = Vec::new();
 
-    for stripe in (0 .. stripes).step_by(BLOCKROW) {
+    for stripe in (0 .. stripes).step_by(block_rs) {
         let a_ptr = a.get_chunk(stripe, blocks, m_stride);
         
-        for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+        for pillar in (0 .. pillars).step_by(block_cs) {
             let b_ptr = b.get_chunk(blocks, pillar, p_stride);
             let c_ptr = c.get_chunk(stripe, pillar, p_stride);
-            args_vec.push((BLOCKROW, m_rem, BLOCKCOL,
+            args_vec.push((block_rs, m_rem, block_cs,
                            Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
         }
         
         let b_ptr = b.get_chunk(blocks, pillars, p_stride);
         let c_ptr = c.get_chunk(stripe, pillars, p_stride);
-        args_vec.push((BLOCKROW, m_rem, col_rem,
+        args_vec.push((block_rs, m_rem, col_rem,
                        Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
     }
 
     let a_ptr = a.get_chunk(stripes, blocks, m_stride);
-    for pillar in (0 .. pillars).step_by(BLOCKCOL) {
+    for pillar in (0 .. pillars).step_by(block_cs) {
         let b_ptr = b.get_chunk(blocks, pillar, p_stride);
         let c_ptr = c.get_chunk(stripes, pillar, p_stride);
-        args_vec.push((row_rem, m_rem, BLOCKCOL,
+        args_vec.push((row_rem, m_rem, block_cs,
                        Ptr::from_ptr(a_ptr), Ptr::from_ptr(b_ptr), Ptr::from_ptr(c_ptr)));
     }
     

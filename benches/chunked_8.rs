@@ -303,6 +303,7 @@ bench_num_sq!(bench_9200_sq);
 bench_num_sq!(bench_9800_sq);
 bench_num_sq!(bench_10496_sq);
 criterion_group!(mega,
+                 bench_4160_sq,
                  bench_5248_sq,
                  bench_5600_sq,
                  bench_6000_sq,
