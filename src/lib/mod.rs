@@ -15,7 +15,7 @@ pub use utilities::matrix_madd_n_sq_chunked;
 use utilities::{check_dimensionality, total_size};
 use matrix_math::{Chunk, single_dot_prod_add, small_matrix_mul_add, matrix_mul_add};
 use matrix_math::scalar_vector_fmadd;
-use matrix_math::{L2_SIZE, BLOCKROW, BLOCKCOL, MEGABLOCKM};
+use matrix_math::{L1_SIZE, L2_SIZE, BLOCKROW, BLOCKCOL, MEGABLOCKM};
 use rayon::prelude::*;
 use danger_math::Ptr;
 use std::cmp::{min, max};
@@ -79,7 +79,7 @@ pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols:
 
 pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
                      a: &[f64], b: &[f64], c: &mut [f64]) {
-    if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L2_SIZE {
+    if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L1_SIZE {
         return matrix_madd(n_rows, m_dim, p_cols, a, b, c);
     }
 
@@ -104,6 +104,7 @@ pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
     let sub_rows = n_rows / threads;
     let row_rem = n_rows % threads;
     let last_rows = sub_rows + row_rem;
+
     c_ptrs.par_iter_mut().enumerate().zip(a_ptrs.into_par_iter()).for_each(|((i, c_arr), a_arr)| {
         let rows = if i == threads - 1 {
             last_rows
