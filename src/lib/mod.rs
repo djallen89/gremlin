@@ -184,31 +184,53 @@ fn iter_param(m_stride: usize, p_stride: usize,
     let block_ms = BLOCKM * 2;
     //let mut block_rs = BLOCKROW;
     let mut block_rs = n_rows;
-    while block_rs > BLOCKROW {
+    while block_rs > BLOCKROW * 4 {
         block_rs /= 4;
     }
+    
+    let mut row_rem = n_rows % block_rs;
+    let mut stripes = n_rows - row_rem;
+
+    loop {
+        let total_stripes = (stripes / block_rs) + if row_rem > 0 { 1 } else { 0 };
+        if total_stripes % 4 != 0 || block_rs % 2 != 0 {
+            block_rs -= 1;
+            row_rem = n_rows % block_rs;
+            stripes = n_rows - row_rem;
+        } else {
+            break
+        }
+    }
+
     //let block_cs = BLOCKCOL;
     let mut block_cs = p_cols;
-    while block_cs > BLOCKCOL {
+    while block_cs > BLOCKCOL * 2 {
         block_cs /= 2;
     }
+
+    let mut col_rem = p_cols % block_cs;
+    let mut pillars = p_cols - col_rem;
+
+    loop {
+        let total_pillars = (pillars / block_cs) + if col_rem > 0 { 1 } else { 0 };
+        if total_pillars % 2 != 0 || block_cs % 8 != 0 {
+            block_cs -= 1;
+            col_rem = p_cols % block_cs;
+            pillars = p_cols - col_rem;
+        } else {
+            break
+        }
+    }
+    
     let m_rem = m_dim % block_ms;
     let blocks = m_dim - m_rem;
-    let row_rem = match n_rows % block_rs {
-        0 => n_rows % block_rs,
-        x => n_rows % (block_rs - 1)
-    };
-    let stripes = n_rows - row_rem;
-    let col_rem = p_cols % block_cs;
-    let pillars = p_cols - col_rem;
 
     let total_stripes = (stripes / block_rs) + if row_rem > 0 { 1 } else { 0 };
     let total_pillars = (pillars / block_cs) + if col_rem > 0 { 1 } else { 0 };
     // (% 780 8) 4
-    if (total_stripes * total_pillars) % 8 != 0 {
-        panic!("Bad number of threads.\n {}, {}, {}", total_stripes % 2, total_pillars % 4,
-               total_stripes * total_pillars);
-    }
+    //if (total_stripes * total_pillars) % 8 != 0 && (total_stripes * total_pillars) > 8 {
+    //panic!("Bad number of threads.\n {}, {} {}", total_stripes * total_pillars, block_rs, block_cs);
+//}
 
     for block in (0 .. blocks).step_by(block_ms) {
         let mut args_vec = Vec::new();
