@@ -21,9 +21,10 @@ use danger_math::Ptr;
 use std::cmp::{min, max};
 use std::mem;
 
-/// Calculates C <= AB + C, where A is a matrix of n rows by m columns,
-/// B is a matrix of m rows by p columns, and C is a matrix of n rows
-/// by p columns.
+/// Calculates C = AB + C on a single thread, where A is a matrix
+/// (represented as a flat array) of n rows by m columns, B is a
+/// matrix of m rows by p columns, and C is a matrix of n rows by p
+/// columns.
 pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
                    a: &[f64], b: &[f64], c: &mut [f64]) {
     match check_dimensionality(n_rows, m_dim, p_cols, a, b, c) {
@@ -54,10 +55,11 @@ pub fn matrix_madd(n_rows: usize, m_dim: usize, p_cols: usize,
                    a_ptr, b_ptr, c_ptr);
 }
 
-/// Calculates C <= AB + C, where A is a matrix of n rows by m
-/// columns, B is a matrix of m rows by p columns, and C is a matrix
-/// of n rows by p columns. Attempts to use as many threads as there
-/// are physical CPU cores on the system.
+/// Calculates C = AB + C, where A is a matrix of n rows by m columns,
+/// B is a matrix of m rows by p columns, and C is a matrix of n rows
+/// by p columns. Attempts to use as many threads as there are
+/// physical CPU cores on the system. If the parameter ``threads'' is
+/// equal to 1, uses the single threaded version.
 pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
                             a: &[f64], b: &[f64], c: &mut [f64]) {     
     if n_rows * m_dim * p_cols <= 8000 {
@@ -77,6 +79,7 @@ pub fn matrix_madd_parallel(threads: usize, n_rows: usize, m_dim: usize, p_cols:
     }
 }
 
+/// Mul
 pub fn multithreaded(threads: usize, n_rows: usize, m_dim: usize, p_cols: usize,
                      a: &[f64], b: &[f64], c: &mut [f64]) {
     if total_size(mem::size_of::<f64>(), n_rows, m_dim, p_cols) <= L2_SIZE {

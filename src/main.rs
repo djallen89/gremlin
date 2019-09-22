@@ -10,6 +10,8 @@ use lib::{matrix_madd_parallel, random_array, float_eq};
 use ndarray::Array;
 use ndarray::linalg::general_mat_mul;
 
+
+/// Converts an argument to an unsigned integer.
 fn arg_to_int(arg: &str) -> usize {
     match arg.parse::<usize>() {
         Ok(x) => x,
@@ -20,6 +22,12 @@ fn arg_to_int(arg: &str) -> usize {
     }
 }
 
+/// Generates 3 random arrays, a, b, and c, where a is n rows by p
+/// columns, b is p rows by m columns, and c is n rows by m columns.
+/// These arrays are then cloned into ndarray's Array type, and it
+/// performs C = AB + C. After that, c is set equal to ab + c using
+/// matrix_madd_parallel, and the two are compared for floating point
+/// equality using test_equality.
 pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     let a: Vec<f64> = random_array(n, p, -100.0, 100.0);
     let b = random_array(p, m, -100.0, 100.0);
@@ -37,6 +45,7 @@ pub fn matrix_madd_nmp(n: usize, m: usize, p: usize) {
     test_equality(n, m, &c, &slice);
 }
 
+/// Compares two arrays for floating point equality of their elements.
 fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     let mut equal = true;
     let mut inequalities = String::new();
@@ -65,10 +74,17 @@ fn test_equality(rows: usize, cols: usize, c: &[f64], correct: &[f64]) {
     }
 }
 
-fn main() {
-    let mut n = 128;
-    let mut m = 128;
-    let mut p = 128;
+/// gremlin can be called with no arguments to run with m, n, and p
+/// equal to 128.  Alternatively, if 1 argument is given, m, n, and p
+/// will be equal to that size; if two arguments are given, n will be
+/// equal to the first argument, and m and p will be equal to the
+/// second argument; if three arguments given, n will be assigned the
+/// first, m the second, and p the third.
+pub fn main() {
+    let default = 128;
+    let mut n = default; 
+    let mut m = default;
+    let mut p = default;
     let args: Vec<String> = env::args().collect();
     match args.len() {
         1 => {},
