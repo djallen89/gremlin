@@ -30,6 +30,7 @@ pub fn get_idx(row: usize, col: usize, n_cols: usize) -> usize {
 
 pub fn float_eq(a: f64, b: f64) -> bool {
     use std::f64;
+    use std::f64::{MIN_POSITIVE, MAX};
     
     let abs_a = a.abs();
     let abs_b = b.abs();
@@ -49,7 +50,7 @@ pub fn float_eq(a: f64, b: f64) -> bool {
     return a == b
         || ((a == 0.0 || b == 0.0 || diff < MIN_POSITIVE)
             && diff < (epsilon * MIN_POSITIVE)) 
-        || (diff / min(a.abs() + b.abs(), MAX)) < epsilon
+        || (diff / f64::min(a.abs() + b.abs(), MAX)) < epsilon
 }
 
 pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
