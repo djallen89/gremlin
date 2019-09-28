@@ -32,20 +32,8 @@ pub fn float_eq(a: f64, b: f64) -> bool {
     use std::f64;
     use std::f64::{MIN_POSITIVE, MAX};
     
-    let abs_a = a.abs();
-    let abs_b = b.abs();
     let diff = (a - b).abs();
     let epsilon = 0.00001;
-
-    /*
-    if a == b {
-	    true
-    } else if a == 0.0 || b == 0.0 || diff < f64::MIN_POSITIVE {
-	    diff < (epsilon * f64::MIN_POSITIVE)
-    } else { 
-	    (diff / f64::min(abs_a + abs_b, f64::MAX)) < epsilon
-    }
-     */
 
     return a == b
         || ((a == 0.0 || b == 0.0 || diff < MIN_POSITIVE)

@@ -583,27 +583,6 @@ fn inner_matrix_mul_add(m_stride: Stride, p_stride: Stride,
 
     /* Calculate the last columns of C */
     if col_rem > 0 {
-        /*
-        unsafe {
-            for block in (0 .. blocks).step_by(MICROBLOCKM) {
-                let a_stripe = a.get_chunk(stripes, block, m_stride);
-                let b_cols = b.get_chunk(block, pillars, p_stride);
-                let c_chunk = c.get_chunk(stripes, pillars, p_stride);
-                
-                foo_calculator(m_stride, p_stride,
-                               row_rem, MICROBLOCKM, col_rem,
-                               a_stripe, b_cols, c_chunk);
-            }
-
-            let a_stripe = a.get_chunk(stripes, blocks, m_stride);
-            let b_cols = b.get_chunk(blocks, pillars, p_stride);
-            let c_chunk = c.get_chunk(stripes, pillars, p_stride);
-            
-            foo_calculator(m_stride, p_stride,
-                           row_rem, m_rem, col_rem,
-                           a_stripe, b_cols, c_chunk);
-        }
-         */
         unsafe {
             let a_stripe = a.get_chunk(stripes, 0, m_stride);
             let b_cols = b.get_chunk(0, pillars, p_stride);
