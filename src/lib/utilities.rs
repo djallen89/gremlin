@@ -36,14 +36,20 @@ pub fn float_eq(a: f64, b: f64) -> bool {
     let diff = (a - b).abs();
     let epsilon = 0.00001;
 
+    /*
     if a == b {
-	true
+	    true
     } else if a == 0.0 || b == 0.0 || diff < f64::MIN_POSITIVE {
-	diff < (epsilon * f64::MIN_POSITIVE)
+	    diff < (epsilon * f64::MIN_POSITIVE)
     } else { 
-	(diff / f64::min(abs_a + abs_b, f64::MAX)) < epsilon
+	    (diff / f64::min(abs_a + abs_b, f64::MAX)) < epsilon
     }
+     */
 
+    return a == b
+        || ((a == 0.0 || b == 0.0 || diff < MIN_POSITIVE)
+            && diff < (epsilon * MIN_POSITIVE)) 
+        || (diff / min(a.abs() + b.abs(), MAX)) < epsilon
 }
 
 pub fn random_array<T>(cols: usize, rows: usize, low: T, high: T) -> Vec<T>
