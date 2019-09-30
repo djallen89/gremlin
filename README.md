@@ -41,7 +41,8 @@ There are four scripts provided to run the benchmarks:
 + parallel16\_bench.sh
 + parallel\_bench.sh
 
-If your cpu has some other number of cores, you can modify
-parallel\_bench.sh to run the parallel benchmark for you.
+If your cpu has some other number of cores, you can call runjob.sh to
+run your parallel benchmark for you, specifying the number of threads
+as the first argument, and the benchmark as the second argument.
     
 
